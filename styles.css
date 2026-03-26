@@ -552,6 +552,25 @@ button:disabled {
   gap: 16px;
 }
 
+.preview-empty-state {
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px dashed rgba(74, 58, 39, 0.18);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--muted);
+}
+
+.preview-empty-state strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.preview-empty-state p {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .preview-card {
   display: grid;
   gap: 12px;

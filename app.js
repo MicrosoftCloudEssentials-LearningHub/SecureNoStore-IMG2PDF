@@ -253,6 +253,20 @@ function getVisibleEntries() {
   return state.files.filter(matchesPageFilter);
 }
 
+function clearHiddenPageFilterIfNeeded() {
+  if (!state.files.length || !state.pageFilters.size) {
+    return false;
+  }
+
+  if (getVisibleEntries().length > 0) {
+    return false;
+  }
+
+  state.pageFilters.clear();
+  saveReviewSettings();
+  return true;
+}
+
 function getActiveExportPresetKey() {
   const controls = getControls();
   const activeEntry = Object.entries(exportPresets).find(([, preset]) => {
@@ -1360,7 +1374,13 @@ async function addFiles(fileList) {
     }
   }
 
+  const clearedHiddenFilter = clearHiddenPageFilterIfNeeded();
   renderPreviews();
+  if (clearedHiddenFilter) {
+    setStatus(`Loaded ${state.files.length} image${state.files.length === 1 ? "" : "s"}. Reset the page filter so the new upload is visible.`);
+    return;
+  }
+
   if (failures.length) {
     setStatus(`Loaded ${state.files.length} image${state.files.length === 1 ? "" : "s"}. Skipped: ${failures.join(", ")}.`);
   }
@@ -1378,6 +1398,15 @@ function renderPreviews() {
   const overrideCount = state.files.filter((entry) => Boolean(entry.scanSettings)).length;
   const perspectiveCount = state.files.filter((entry) => Boolean(getEntryAdjustments(entry).perspectiveEnabled)).length;
   const visibleEntries = getVisibleEntries();
+
+  if (!visibleEntries.length && state.files.length) {
+    const emptyState = document.createElement("div");
+    emptyState.className = "preview-empty-state";
+    emptyState.innerHTML = state.pageFilters.size
+      ? "<strong>No pages match the current filter.</strong><p>Choose Show all pages in the filter menu to see the uploaded pages again.</p>"
+      : "<strong>No pages are available to preview.</strong>";
+    elements.previewList.appendChild(emptyState);
+  }
 
   visibleEntries.forEach((entry) => {
     const fragment = elements.previewTemplate.content.cloneNode(true);
