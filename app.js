@@ -627,7 +627,7 @@ function renderOriginalImageAtSize(sourceImage, width, height) {
   const context = canvas.getContext("2d");
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.drawImage(sourceImage, 0, 0);
+  context.drawImage(sourceImage, 0, 0, width, height);
   return canvas;
 }
 
