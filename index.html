@@ -277,42 +277,27 @@
               <h2>Preview queue</h2>
             </div>
             <div class="preview-toolbar">
-              <p class="section-note">Drag pages to reorder and select pages for batch apply.</p>
-              <div class="preview-toolbar-actions">
-                <button id="select-all-btn" class="secondary-button" type="button" disabled>Select all</button>
-                <button id="select-scan-overrides-btn" class="secondary-button" type="button" disabled>Select scan overrides</button>
-                <button id="select-perspective-pages-btn" class="secondary-button" type="button" disabled>Select perspective corrected</button>
-                <button id="clear-selection-btn" class="secondary-button" type="button" disabled>Clear selection</button>
-              </div>
+              <label>
+                <span class="sr-only">Page selection</span>
+                <select id="page-selection-action">
+                  <option value="" selected disabled>Select pages…</option>
+                  <option value="select-all">Select all</option>
+                  <option value="select-scan-overrides">Select scan overrides</option>
+                  <option value="select-perspective">Select perspective corrected</option>
+                  <option value="clear-selection">Clear selection</option>
+                </select>
+              </label>
+              <label>
+                <span class="sr-only">Page filter</span>
+                <select id="page-filter-select">
+                  <option value="all">Show all pages</option>
+                  <option value="selected">Selected only</option>
+                  <option value="blank">Blank candidates</option>
+                  <option value="scan-override">Scan overrides</option>
+                  <option value="perspective">Perspective corrected</option>
+                </select>
+              </label>
             </div>
-          </div>
-          <div class="filter-preset-bar" role="toolbar" aria-label="Saved review presets">
-            <button class="filter-preset-button" type="button" data-preset="review-blanks">Review blanks</button>
-            <button class="filter-preset-button" type="button" data-preset="review-overrides">Review overrides</button>
-            <button class="filter-preset-button" type="button" data-preset="review-perspective">Review perspective fixes</button>
-          </div>
-          <div class="page-filter-bar" role="toolbar" aria-label="Page filters">
-            <button id="reset-filters-btn" class="secondary-button" type="button">Reset filters</button>
-            <button class="filter-chip is-active" type="button" data-filter="all">
-              <span class="filter-chip-label">All</span>
-              <span class="filter-chip-count">0</span>
-            </button>
-            <button class="filter-chip" type="button" data-filter="selected">
-              <span class="filter-chip-label">Selected</span>
-              <span class="filter-chip-count">0</span>
-            </button>
-            <button class="filter-chip" type="button" data-filter="blank">
-              <span class="filter-chip-label">Blank candidate</span>
-              <span class="filter-chip-count">0</span>
-            </button>
-            <button class="filter-chip" type="button" data-filter="scan-override">
-              <span class="filter-chip-label">Scan override</span>
-              <span class="filter-chip-count">0</span>
-            </button>
-            <button class="filter-chip" type="button" data-filter="perspective">
-              <span class="filter-chip-label">Perspective corrected</span>
-              <span class="filter-chip-count">0</span>
-            </button>
           </div>
           <p id="active-filters-summary" class="active-filters-summary">Showing all pages.</p>
           <div id="preview-list" class="preview-list" aria-live="polite"></div>

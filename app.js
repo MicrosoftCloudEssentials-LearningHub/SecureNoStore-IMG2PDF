@@ -54,12 +54,6 @@ const broadlySupportedExtensions = new Set([
 
 const browserNativeExtensions = new Set(["jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "svg"]);
 
-const reviewPresets = {
-  "review-blanks": ["blank"],
-  "review-overrides": ["scan-override"],
-  "review-perspective": ["perspective"],
-};
-
 const exportPresets = {
   "archive-pdf": { exportFormat: "pdf", exportVisibleOnly: false, pdfQuality: "high" },
   "visible-review-zip": { exportFormat: "png", exportVisibleOnly: true },
@@ -97,13 +91,8 @@ const elements = {
   removeBlankBtn: document.querySelector("#remove-blank-btn"),
   removeSelectedBtn: document.querySelector("#remove-selected-btn"),
   clearBtn: document.querySelector("#clear-btn"),
-  selectAllBtn: document.querySelector("#select-all-btn"),
-  selectScanOverridesBtn: document.querySelector("#select-scan-overrides-btn"),
-  selectPerspectivePagesBtn: document.querySelector("#select-perspective-pages-btn"),
-  clearSelectionBtn: document.querySelector("#clear-selection-btn"),
-  resetFiltersBtn: document.querySelector("#reset-filters-btn"),
-  filterChips: Array.from(document.querySelectorAll(".filter-chip")),
-  filterPresetButtons: Array.from(document.querySelectorAll(".filter-preset-button")),
+  pageSelectionAction: document.querySelector("#page-selection-action"),
+  pageFilterSelect: document.querySelector("#page-filter-select"),
   exportPresetButtons: Array.from(document.querySelectorAll(".export-preset-button")),
   activeFiltersSummary: document.querySelector("#active-filters-summary"),
   adjustOverlay: document.querySelector("#adjust-overlay"),
@@ -271,12 +260,6 @@ function getVisibleEntries() {
   return state.files.filter(matchesPageFilter);
 }
 
-function getActivePresetKey() {
-  const activeFilters = [...state.pageFilters].sort().join("|");
-  const presetEntry = Object.entries(reviewPresets).find(([, filters]) => filters.slice().sort().join("|") === activeFilters);
-  return presetEntry?.[0] || null;
-}
-
 function getActiveExportPresetKey() {
   const controls = getControls();
   const activeEntry = Object.entries(exportPresets).find(([, preset]) => {
@@ -299,22 +282,15 @@ function getFilterCounts() {
 
 function updateFilterChipState() {
   const counts = getFilterCounts();
-  elements.filterChips.forEach((chip) => {
-    const { filter } = chip.dataset;
-    const isActive = filter === "all" ? state.pageFilters.size === 0 : state.pageFilters.has(filter);
-    chip.classList.toggle("is-active", isActive);
-    chip.setAttribute("aria-pressed", String(isActive));
-    const countElement = chip.querySelector(".filter-chip-count");
-    if (countElement) {
-      countElement.textContent = String(counts[filter] ?? 0);
-    }
-  });
+  const activeFilter = state.pageFilters.size === 0 ? "all" : [...state.pageFilters][0];
+  elements.pageFilterSelect.value = activeFilter;
 
-  const activePresetKey = getActivePresetKey();
-  elements.filterPresetButtons.forEach((button) => {
-    const isActive = button.dataset.preset === activePresetKey;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-pressed", String(isActive));
+  // Update option labels with counts
+  Array.from(elements.pageFilterSelect.options).forEach((option) => {
+    const filter = option.value;
+    const count = counts[filter] ?? 0;
+    const baseLabels = { all: "Show all pages", selected: "Selected only", blank: "Blank candidates", "scan-override": "Scan overrides", perspective: "Perspective corrected" };
+    option.textContent = `${baseLabels[filter] || filter} (${count})`;
   });
 
   const activeExportPresetKey = getActiveExportPresetKey();
@@ -331,11 +307,9 @@ function getActiveFilterSummary() {
     return `Showing all pages.${visibleOnlySuffix}`;
   }
 
-  const labels = elements.filterChips
-    .filter((chip) => state.pageFilters.has(chip.dataset.filter))
-    .map((chip) => chip.querySelector(".filter-chip-label")?.textContent || chip.dataset.filter);
-
-  return `Active filters: ${labels.join(" + ")}.${visibleOnlySuffix}`;
+  const filterLabels = { selected: "Selected", blank: "Blank candidates", "scan-override": "Scan overrides", perspective: "Perspective corrected" };
+  const labels = [...state.pageFilters].map((f) => filterLabels[f] || f);
+  return `Showing: ${labels.join(" + ")}.${visibleOnlySuffix}`;
 }
 
 function sanitizeBaseName(fileName) {
@@ -1457,10 +1431,7 @@ function renderPreviews() {
   elements.removeBlankBtn.disabled = state.files.length === 0;
   elements.removeSelectedBtn.disabled = selectedCount === 0;
   elements.clearBtn.disabled = state.files.length === 0;
-  elements.selectAllBtn.disabled = state.files.length === 0;
-  elements.selectScanOverridesBtn.disabled = overrideCount === 0;
-  elements.selectPerspectivePagesBtn.disabled = perspectiveCount === 0;
-  elements.clearSelectionBtn.disabled = selectedCount === 0;
+  elements.pageSelectionAction.value = "";
   elements.adjustApplySelected.disabled = selectedCount === 0 || !state.activeAdjustId;
   updateFilterChipState();
   elements.activeFiltersSummary.textContent = getActiveFilterSummary();
@@ -1621,33 +1592,13 @@ function setPageFilter(filter) {
     return;
   }
 
-  if (state.pageFilters.has(filter)) {
-    state.pageFilters.delete(filter);
-  } else {
-    state.pageFilters.add(filter);
-  }
+  state.pageFilters = new Set([filter]);
   saveReviewSettings();
   renderPreviews();
 }
 
 function resetPageFilters() {
   state.pageFilters.clear();
-  saveReviewSettings();
-  renderPreviews();
-}
-
-function applyFilterPreset(presetKey) {
-  const filters = reviewPresets[presetKey];
-  if (!filters) {
-    return;
-  }
-
-  state.pageFilters = new Set(filters);
-  if (elements.prefAutoSelectReviewPreset.checked) {
-    state.files.forEach((entry) => {
-      entry.selected = matchesPageFilter(entry);
-    });
-  }
   saveReviewSettings();
   renderPreviews();
 }
@@ -2627,16 +2578,16 @@ elements.keepSelectedBtn.addEventListener("click", keepSelectedPagesOnly);
 elements.removeBlankBtn.addEventListener("click", removeBlankPages);
 elements.removeSelectedBtn.addEventListener("click", removeSelectedPages);
 elements.clearBtn.addEventListener("click", clearAll);
-elements.selectAllBtn.addEventListener("click", () => setAllSelections(true));
-elements.selectScanOverridesBtn.addEventListener("click", selectPagesWithScanOverrides);
-elements.selectPerspectivePagesBtn.addEventListener("click", selectPerspectiveCorrectedPages);
-elements.clearSelectionBtn.addEventListener("click", () => setAllSelections(false));
-elements.resetFiltersBtn.addEventListener("click", resetPageFilters);
-elements.filterChips.forEach((chip) => {
-  chip.addEventListener("click", () => setPageFilter(chip.dataset.filter));
+elements.pageSelectionAction.addEventListener("change", () => {
+  const action = elements.pageSelectionAction.value;
+  if (action === "select-all") setAllSelections(true);
+  else if (action === "select-scan-overrides") selectPagesWithScanOverrides();
+  else if (action === "select-perspective") selectPerspectiveCorrectedPages();
+  else if (action === "clear-selection") setAllSelections(false);
+  elements.pageSelectionAction.value = "";
 });
-elements.filterPresetButtons.forEach((button) => {
-  button.addEventListener("click", () => applyFilterPreset(button.dataset.preset));
+elements.pageFilterSelect.addEventListener("change", () => {
+  setPageFilter(elements.pageFilterSelect.value);
 });
 elements.exportPresetButtons.forEach((button) => {
   button.addEventListener("click", () => applyExportPreset(button.dataset.exportPreset));
