@@ -274,15 +274,85 @@ h1 {
   margin-top: 22px;
 }
 
-.controls-grid.disabled {
-  opacity: 0.5;
+.quick-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
 }
 
+.quick-controls label,
 .controls-grid label {
   display: grid;
   gap: 8px;
   font-size: 0.95rem;
   font-weight: 700;
+}
+
+.quick-toggle {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 58, 39, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-toggle input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.controls-grid.disabled {
+  opacity: 0.5;
+}
+
+.control-disclosure {
+  margin-top: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(74, 58, 39, 0.1);
+  background: rgba(255, 255, 255, 0.56);
+  overflow: hidden;
+}
+
+.control-disclosure summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 18px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.control-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-disclosure summary::after {
+  content: "+";
+  float: right;
+  color: var(--accent-dark);
+}
+
+.control-disclosure[open] summary::after {
+  content: "-";
+}
+
+.control-disclosure .controls-grid {
+  margin: 0;
+  padding: 0 18px 18px;
+}
+
+.automation-disclosure .automation-panel {
+  margin-top: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding-top: 0;
 }
 
 .checkbox-control {
@@ -891,6 +961,12 @@ button:disabled {
 
 @media (max-width: 960px) {
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-controls,
+  .controls-grid,
+  .automation-grid {
     grid-template-columns: 1fr;
   }
 

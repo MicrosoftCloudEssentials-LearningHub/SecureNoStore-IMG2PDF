@@ -64,6 +64,7 @@ const state = {
   activeCropEdge: null,
   activeCropPointer: null,
   adjustPreviewMetrics: null,
+  opencvReadyHandled: false,
 };
 
 const elements = {
@@ -495,6 +496,7 @@ function createDefaultAdjustments() {
     perspectiveEnabled: false,
     autoDetected: false,
     autoDetectionTried: false,
+    autoDetectionMaxDimension: 0,
     corners: createDefaultCorners(),
   };
 }
@@ -513,6 +515,7 @@ function getEntryAdjustments(entry) {
   entry.adjustments.corners ||= createDefaultCorners();
   entry.adjustments.autoDetected ||= false;
   entry.adjustments.autoDetectionTried ||= false;
+  entry.adjustments.autoDetectionMaxDimension ||= 0;
   return entry.adjustments;
 }
 
@@ -545,17 +548,23 @@ function applyDetectedDocumentAdjustments(adjustments, detectedDocument) {
   adjustments.perspectiveEnabled = true;
   adjustments.autoDetected = true;
   adjustments.autoDetectionTried = true;
+  adjustments.autoDetectionMaxDimension = Math.max(adjustments.autoDetectionMaxDimension || 0, adjustPreviewMaxDimension);
 }
 
 function maybeAutoDetectEntryDocument(entry, maxDimension = adjustPreviewMaxDimension) {
   const adjustments = getEntryAdjustments(entry);
-  if (!opencvReady() || adjustments.autoDetectionTried || hasMeaningfulAdjustments(adjustments)) {
+  if (!opencvReady() || adjustments.autoDetected || hasMeaningfulAdjustments(adjustments)) {
+    return false;
+  }
+
+  if (adjustments.autoDetectionTried && (adjustments.autoDetectionMaxDimension || 0) >= maxDimension) {
     return false;
   }
 
   const baseCanvas = getBaseAdjustedCanvas(entry.sourceImage, adjustments, maxDimension);
   const detectedDocument = detectDocumentShape(baseCanvas);
   adjustments.autoDetectionTried = true;
+  adjustments.autoDetectionMaxDimension = Math.max(adjustments.autoDetectionMaxDimension || 0, maxDimension);
   if (!detectedDocument) {
     return false;
   }
@@ -578,11 +587,41 @@ function autoDetectPendingEntries(entries = state.files, maxDimension = adjustPr
   return detectedCount;
 }
 
-function countPendingAutoDetectEntries(entries = state.files) {
+function countPendingAutoDetectEntries(entries = state.files, maxDimension = adjustPreviewMaxDimension) {
   return entries.filter((entry) => {
     const adjustments = getEntryAdjustments(entry);
-    return !adjustments.autoDetectionTried && !hasMeaningfulAdjustments(adjustments);
+    return !adjustments.autoDetected
+      && !hasMeaningfulAdjustments(adjustments)
+      && ((adjustments.autoDetectionMaxDimension || 0) < maxDimension);
   }).length;
+}
+
+function handleOpenCvReady() {
+  if (state.opencvReadyHandled) {
+    return;
+  }
+
+  state.opencvReadyHandled = true;
+  scheduleRenderPreviews();
+  if (state.activeAdjustId) {
+    renderAdjustPreview();
+  }
+}
+
+function watchOpenCvReadiness() {
+  if (opencvReady()) {
+    handleOpenCvReady();
+    return;
+  }
+
+  const readinessPoll = window.setInterval(() => {
+    if (!opencvReady()) {
+      return;
+    }
+
+    window.clearInterval(readinessPoll);
+    handleOpenCvReady();
+  }, 250);
 }
 
 function getBaseAdjustedCanvas(sourceImage, adjustments, maxDimension) {
@@ -817,9 +856,9 @@ function scoreDocumentCandidate(points) {
   score += fillRatio * 1.8;
   score += centerScore * 0.9;
 
-  if (minMargin < 0.008) {
+  if (minMargin < 0.004) {
     score -= 0.45;
-  } else if (minMargin < 0.02) {
+  } else if (minMargin < 0.015) {
     score -= 0.2;
   }
 
@@ -853,6 +892,18 @@ function getBoundingRectPoints(contour, canvas) {
   });
 }
 
+function getMinAreaRectPoints(contour, canvas) {
+  const rotatedRect = window.cv.minAreaRect(contour);
+  const boxMat = new window.cv.Mat();
+  window.cv.boxPoints(rotatedRect, boxMat);
+  const points = [];
+  for (let i = 0; i < 4; i += 1) {
+    points.push({ x: boxMat.data32F[i * 2] / canvas.width, y: boxMat.data32F[i * 2 + 1] / canvas.height });
+  }
+  boxMat.delete();
+  return points;
+}
+
 function getBestDocumentCandidateFromContours(contours, canvas, preferQuadrilateral = false) {
   let bestCandidate = null;
 
@@ -872,8 +923,25 @@ function getBestDocumentCandidateFromContours(contours, canvas, preferQuadrilate
       }
     }
 
+    // Try a looser approximation — helps with slightly curved or crumpled pages
+    if (!candidate) {
+      const looseApprox = new window.cv.Mat();
+      window.cv.approxPolyDP(contour, looseApprox, 0.05 * perimeter, true);
+      if (looseApprox.rows === 4) {
+        candidate = buildDocumentCandidate(getContourPoints(looseApprox, canvas));
+        if (candidate) {
+          candidate.score += 0.2;
+        }
+      }
+      looseApprox.delete();
+    }
+
+    // Fall back to minAreaRect (rotated bounding rectangle) for bright-region pipeline
     if (!candidate && !preferQuadrilateral) {
-      candidate = buildDocumentCandidate(getBoundingRectPoints(contour, canvas));
+      candidate = buildDocumentCandidate(getMinAreaRectPoints(contour, canvas));
+      if (!candidate) {
+        candidate = buildDocumentCandidate(getBoundingRectPoints(contour, canvas));
+      }
     }
 
     if (candidate) {
@@ -952,19 +1020,39 @@ function detectDocumentShape(canvas) {
   const src = window.cv.imread(canvas);
   const gray = new window.cv.Mat();
   const blurred = new window.cv.Mat();
+  const bigBlurred = new window.cv.Mat();
+  const brightMask = new window.cv.Mat();
+  const brightClosed = new window.cv.Mat();
   const thresholded = new window.cv.Mat();
   const closed = new window.cv.Mat();
   const edged = new window.cv.Mat();
   const dilatedEdges = new window.cv.Mat();
+  const brightContours = new window.cv.MatVector();
+  const brightHierarchy = new window.cv.Mat();
   const maskContours = new window.cv.MatVector();
   const maskHierarchy = new window.cv.Mat();
   const edgeContours = new window.cv.MatVector();
   const edgeHierarchy = new window.cv.Mat();
   const closeKernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(11, 11));
+  // Larger close kernel for bright pipeline — bridges shadows and curled corners
+  const bigCloseKernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(25, 25));
   const edgeKernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(5, 5));
 
   window.cv.cvtColor(src, gray, window.cv.COLOR_RGBA2GRAY, 0);
   window.cv.GaussianBlur(gray, blurred, new window.cv.Size(5, 5), 0);
+  // Use a heavier blur for the bright-region threshold to reduce texture/text noise
+  window.cv.GaussianBlur(gray, bigBlurred, new window.cv.Size(9, 9), 0);
+
+  // Bright-region pipeline: isolate bright (paper) regions on dark backgrounds
+  const otsuThreshold = window.cv.threshold(bigBlurred, brightMask, 0, 255, window.cv.THRESH_BINARY + window.cv.THRESH_OTSU);
+  // If Otsu threshold is very low (nearly all dark), use a lower fixed fallback to catch
+  // slightly darker paper or shadowed edges
+  if (otsuThreshold < 128) {
+    window.cv.threshold(bigBlurred, brightMask, 128, 255, window.cv.THRESH_BINARY);
+  }
+  window.cv.morphologyEx(brightMask, brightClosed, window.cv.MORPH_CLOSE, bigCloseKernel);
+  window.cv.findContours(brightClosed, brightContours, brightHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
+
   window.cv.adaptiveThreshold(blurred, thresholded, 255, window.cv.ADAPTIVE_THRESH_GAUSSIAN_C, window.cv.THRESH_BINARY, 31, 9);
   window.cv.morphologyEx(thresholded, closed, window.cv.MORPH_CLOSE, closeKernel);
   window.cv.findContours(closed, maskContours, maskHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
@@ -973,24 +1061,35 @@ function detectDocumentShape(canvas) {
   window.cv.dilate(edged, dilatedEdges, edgeKernel);
   window.cv.findContours(dilatedEdges, edgeContours, edgeHierarchy, window.cv.RETR_LIST, window.cv.CHAIN_APPROX_SIMPLE);
 
+  const brightCandidate = getBestDocumentCandidateFromContours(brightContours, canvas, false);
+  if (brightCandidate) {
+    // Strong bonus: bright-region isolation is the most reliable path for dark-background photos
+    brightCandidate.score += 0.8;
+  }
   const maskCandidate = getBestDocumentCandidateFromContours(maskContours, canvas, false);
   const edgeCandidate = getBestDocumentCandidateFromContours(edgeContours, canvas, true);
-  const bestCandidate = [maskCandidate, edgeCandidate]
+  const bestCandidate = [brightCandidate, maskCandidate, edgeCandidate]
     .filter(Boolean)
     .sort((left, right) => right.score - left.score)[0] || null;
 
   src.delete();
   gray.delete();
   blurred.delete();
+  bigBlurred.delete();
+  brightMask.delete();
+  brightClosed.delete();
   thresholded.delete();
   closed.delete();
   edged.delete();
   dilatedEdges.delete();
+  brightContours.delete();
+  brightHierarchy.delete();
   maskContours.delete();
   maskHierarchy.delete();
   edgeContours.delete();
   edgeHierarchy.delete();
   closeKernel.delete();
+  bigCloseKernel.delete();
   edgeKernel.delete();
 
   if (!bestCandidate) {
@@ -1732,21 +1831,21 @@ async function exportImageSet(format) {
     return;
   }
 
-  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries);
+  const controls = getControls();
+  const qualitySettings = getPdfQualitySettings(controls.pdfQuality);
+  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries, qualitySettings.scaleLimit);
   if (pendingAutoDetectCount && !opencvReady()) {
     setStatus(`Document cleanup is still loading. Wait a moment and export again so ${pendingAutoDetectCount === 1 ? "this page is" : "these pages are"} flattened like scanned documents.`);
     return;
   }
 
-  autoDetectPendingEntries(entries);
+  autoDetectPendingEntries(entries, qualitySettings.scaleLimit);
 
   if (!window.JSZip) {
     setStatus("ZIP export is still loading. Try again in a moment.");
     return;
   }
 
-  const controls = getControls();
-  const qualitySettings = getPdfQualitySettings(controls.pdfQuality);
   const zip = new window.JSZip();
   const mimeType = format === "png" ? "image/png" : "image/jpeg";
   const extension = format === "png" ? "png" : "jpg";
@@ -2303,13 +2402,16 @@ async function exportPdf() {
     return;
   }
 
-  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries);
+  const controls = getControls();
+  const qualitySettings = getPdfQualitySettings(controls.pdfQuality);
+
+  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries, qualitySettings.scaleLimit);
   if (pendingAutoDetectCount && !opencvReady()) {
     setStatus(`Document cleanup is still loading. Wait a moment and export again so ${pendingAutoDetectCount === 1 ? "this page is" : "these pages are"} flattened like scanned documents.`);
     return;
   }
 
-  autoDetectPendingEntries(entries);
+  autoDetectPendingEntries(entries, qualitySettings.scaleLimit);
 
   const pageSize = pageFormats[elements.pageSize.value];
   const doc = new jsPDF({
@@ -2319,8 +2421,6 @@ async function exportPdf() {
     compress: true,
   });
 
-  const controls = getControls();
-  const qualitySettings = getPdfQualitySettings(controls.pdfQuality);
   setStatus("Rendering PDF locally...");
 
   for (const [index, entry] of entries.entries()) {
@@ -2534,4 +2634,5 @@ updateAutomationPreferenceState();
 updateDownloadButtonLabel();
 updateVisibleActionLabels();
 updateBlankActionLabel();
+watchOpenCvReadiness();
 renderPreviews();

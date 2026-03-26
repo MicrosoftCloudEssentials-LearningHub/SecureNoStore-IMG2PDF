@@ -80,7 +80,7 @@
             <p class="mode-switch-note">Turn this off to export the original images without black-and-white scan styling.</p>
           </div>
 
-          <div class="controls-grid">
+          <div class="quick-controls">
             <label>
               <span>Output paper</span>
               <select id="page-size">
@@ -98,52 +98,6 @@
               </select>
             </label>
 
-            <p id="preset-description" class="control-hint" aria-live="polite">
-              Office scanner keeps pages light and clean with the least texture.
-            </p>
-
-            <label>
-              <span>Brightness</span>
-              <input id="brightness" type="range" min="-40" max="40" value="14" />
-            </label>
-
-            <label>
-              <span>Contrast</span>
-              <input id="contrast" type="range" min="60" max="180" value="106" />
-            </label>
-
-            <label>
-              <span>Grain</span>
-              <input id="grain" type="range" min="0" max="24" value="1" />
-            </label>
-
-            <label>
-              <span>Edge vignette</span>
-              <input id="vignette" type="range" min="0" max="40" value="2" />
-            </label>
-
-            <label>
-              <span>Page margin</span>
-              <input id="page-margin" type="range" min="0" max="20" value="8" />
-            </label>
-
-            <label>
-              <span>Image fit</span>
-              <select id="image-fit">
-                <option value="contain" selected>Fit inside page</option>
-                <option value="cover">Fill page</option>
-              </select>
-            </label>
-
-            <label>
-              <span>PDF quality</span>
-              <select id="pdf-quality">
-                <option value="compact">Compact</option>
-                <option value="standard" selected>Standard</option>
-                <option value="high">High</option>
-              </select>
-            </label>
-
             <label>
               <span>Download as</span>
               <select id="export-format">
@@ -154,49 +108,112 @@
             </label>
 
             <label>
-              <span>OCR language</span>
-              <select id="ocr-language">
-                <option value="eng" selected>English</option>
-                <option value="eng+spa">English + Spanish</option>
-                <option value="eng+fra">English + French</option>
-                <option value="eng+deu">English + German</option>
-                <option value="eng+por">English + Portuguese</option>
-                <option value="eng+ita">English + Italian</option>
-                <option value="eng+nld">English + Dutch</option>
-                <option value="eng+pol">English + Polish</option>
-                <option value="eng+tur">English + Turkish</option>
-                <option value="eng+rus">English + Russian</option>
-                <option value="eng+ukr">English + Ukrainian</option>
-                <option value="eng+ara">English + Arabic</option>
-                <option value="eng+hin">English + Hindi</option>
-                <option value="eng+jpn">English + Japanese</option>
-                <option value="eng+kor">English + Korean</option>
-                <option value="eng+chi_sim">English + Simplified Chinese</option>
+              <span>Image fit</span>
+              <select id="image-fit">
+                <option value="contain" selected>Fit inside page</option>
+                <option value="cover">Fill page</option>
               </select>
             </label>
 
-            <label>
-              <span>Custom OCR code</span>
-              <input id="ocr-language-custom" type="text" placeholder="Example: eng+spa or deu" spellcheck="false" />
-            </label>
-
-            <label class="checkbox-control">
+            <label class="quick-toggle">
               <span>Auto background cleanup</span>
               <input id="auto-cleanup" type="checkbox" checked />
             </label>
 
-            <label class="checkbox-control">
-              <span>Select detected blanks first</span>
-              <input id="select-detected-blanks" type="checkbox" checked />
-            </label>
-
-            <label class="checkbox-control">
+            <label class="quick-toggle">
               <span>Export visible pages only</span>
               <input id="export-visible-only" type="checkbox" />
             </label>
+
+            <p id="preset-description" class="control-hint" aria-live="polite">
+              Office scanner keeps pages light and clean with the least texture.
+            </p>
           </div>
 
-          <section class="automation-panel" aria-labelledby="automation-title">
+          <details class="control-disclosure" open>
+            <summary>Scan tuning</summary>
+            <div class="controls-grid">
+              <label>
+                <span>Brightness</span>
+                <input id="brightness" type="range" min="-40" max="40" value="14" />
+              </label>
+
+              <label>
+                <span>Contrast</span>
+                <input id="contrast" type="range" min="60" max="180" value="106" />
+              </label>
+
+              <label>
+                <span>Grain</span>
+                <input id="grain" type="range" min="0" max="24" value="1" />
+              </label>
+
+              <label>
+                <span>Edge vignette</span>
+                <input id="vignette" type="range" min="0" max="40" value="2" />
+              </label>
+            </div>
+          </details>
+
+          <details class="control-disclosure">
+            <summary>Advanced export</summary>
+            <div class="controls-grid controls-grid-secondary">
+              <label>
+                <span>Page margin</span>
+                <input id="page-margin" type="range" min="0" max="20" value="8" />
+              </label>
+
+              <label>
+                <span>PDF quality</span>
+                <select id="pdf-quality">
+                  <option value="compact">Compact</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+          <details class="control-disclosure">
+            <summary>OCR and review</summary>
+            <div class="controls-grid controls-grid-secondary">
+              <label>
+                <span>OCR language</span>
+                <select id="ocr-language">
+                  <option value="eng" selected>English</option>
+                  <option value="eng+spa">English + Spanish</option>
+                  <option value="eng+fra">English + French</option>
+                  <option value="eng+deu">English + German</option>
+                  <option value="eng+por">English + Portuguese</option>
+                  <option value="eng+ita">English + Italian</option>
+                  <option value="eng+nld">English + Dutch</option>
+                  <option value="eng+pol">English + Polish</option>
+                  <option value="eng+tur">English + Turkish</option>
+                  <option value="eng+rus">English + Russian</option>
+                  <option value="eng+ukr">English + Ukrainian</option>
+                  <option value="eng+ara">English + Arabic</option>
+                  <option value="eng+hin">English + Hindi</option>
+                  <option value="eng+jpn">English + Japanese</option>
+                  <option value="eng+kor">English + Korean</option>
+                  <option value="eng+chi_sim">English + Simplified Chinese</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Custom OCR code</span>
+                <input id="ocr-language-custom" type="text" placeholder="Example: eng+spa or deu" spellcheck="false" />
+              </label>
+
+              <label class="checkbox-control">
+                <span>Select detected blanks first</span>
+                <input id="select-detected-blanks" type="checkbox" checked />
+              </label>
+            </div>
+          </details>
+
+          <details class="control-disclosure automation-disclosure">
+            <summary>Saved preferences</summary>
+            <section class="automation-panel" aria-labelledby="automation-title">
             <div class="automation-header">
               <div>
                 <p class="section-label">Automation</p>
@@ -232,7 +249,8 @@
               <button class="export-preset-button" type="button" data-export-preset="visible-review-zip">Visible review ZIP</button>
               <button class="export-preset-button" type="button" data-export-preset="ocr-review-mode">OCR review mode</button>
             </div>
-          </section>
+            </section>
+          </details>
 
           <div class="actions-row">
             <button id="download-btn" class="primary-button" disabled>Download PDF</button>
