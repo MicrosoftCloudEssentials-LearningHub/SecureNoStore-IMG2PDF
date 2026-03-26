@@ -523,13 +523,13 @@ function hasMeaningfulAdjustments(adjustments) {
   );
 }
 
-function applyDetectedDocumentAdjustments(adjustments, detectedDocument) {
+function applyDetectedDocumentAdjustments(adjustments, detectedDocument, enablePerspective = false) {
   adjustments.corners = detectedDocument.corners;
   adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
   adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
   adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.bottom) * 100));
   adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.left * 100));
-  adjustments.perspectiveEnabled = true;
+  adjustments.perspectiveEnabled = enablePerspective;
   adjustments.autoDetected = true;
   adjustments.autoDetectionTried = true;
   adjustments.autoDetectionMaxDimension = Math.max(adjustments.autoDetectionMaxDimension || 0, adjustPreviewMaxDimension);
@@ -757,8 +757,9 @@ function orderCorners(points) {
   const sortedBySum = [...points].sort((left, right) => (left.x + left.y) - (right.x + right.y));
   const topLeft = sortedBySum[0];
   const bottomRight = sortedBySum[3];
+  // Sort ascending by x-y: smallest x-y = bottom-left, largest x-y = top-right
   const remaining = sortedBySum.slice(1, 3).sort((left, right) => (left.x - left.y) - (right.x - right.y));
-  return [topLeft, remaining[0], bottomRight, remaining[1]];
+  return [topLeft, remaining[1], bottomRight, remaining[0]];
 }
 
 function getPolygonArea(points) {
@@ -2323,7 +2324,7 @@ function autoDetectActiveDocument() {
   }
 
   const adjustments = getEntryAdjustments(entry);
-  applyDetectedDocumentAdjustments(adjustments, detectedDocument);
+  applyDetectedDocumentAdjustments(adjustments, detectedDocument, true);
   syncAdjustInputs(entry);
   elements.adjustPerspective.checked = true;
   renderAdjustPreview();
