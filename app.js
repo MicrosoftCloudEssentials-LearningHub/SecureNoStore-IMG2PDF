@@ -561,10 +561,18 @@ function maybeAutoDetectEntryDocument(entry, maxDimension = adjustPreviewMaxDime
     return false;
   }
 
-  const baseCanvas = getBaseAdjustedCanvas(entry.sourceImage, adjustments, maxDimension);
-  const detectedDocument = detectDocumentShape(baseCanvas);
+  // Mark as tried before running detection so errors don't cause infinite retry loops
   adjustments.autoDetectionTried = true;
   adjustments.autoDetectionMaxDimension = Math.max(adjustments.autoDetectionMaxDimension || 0, maxDimension);
+
+  let detectedDocument;
+  try {
+    const baseCanvas = getBaseAdjustedCanvas(entry.sourceImage, adjustments, maxDimension);
+    detectedDocument = detectDocumentShape(baseCanvas);
+  } catch {
+    return false;
+  }
+
   if (!detectedDocument) {
     return false;
   }
@@ -893,15 +901,20 @@ function getBoundingRectPoints(contour, canvas) {
 }
 
 function getMinAreaRectPoints(contour, canvas) {
-  const rotatedRect = window.cv.minAreaRect(contour);
-  const boxMat = new window.cv.Mat();
-  window.cv.boxPoints(rotatedRect, boxMat);
-  const points = [];
-  for (let i = 0; i < 4; i += 1) {
-    points.push({ x: boxMat.data32F[i * 2] / canvas.width, y: boxMat.data32F[i * 2 + 1] / canvas.height });
-  }
-  boxMat.delete();
-  return points;
+  const rect = window.cv.minAreaRect(contour);
+  const angle = (rect.angle || 0) * Math.PI / 180;
+  const cx = rect.center.x;
+  const cy = rect.center.y;
+  const hw = rect.size.width / 2;
+  const hh = rect.size.height / 2;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    { x: (cx + cos * hw - sin * hh) / canvas.width, y: (cy + sin * hw + cos * hh) / canvas.height },
+    { x: (cx - cos * hw - sin * hh) / canvas.width, y: (cy - sin * hw + cos * hh) / canvas.height },
+    { x: (cx - cos * hw + sin * hh) / canvas.width, y: (cy - sin * hw - cos * hh) / canvas.height },
+    { x: (cx + cos * hw + sin * hh) / canvas.width, y: (cy + sin * hw - cos * hh) / canvas.height },
+  ];
 }
 
 function getBestDocumentCandidateFromContours(contours, canvas, preferQuadrilateral = false) {
