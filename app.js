@@ -5,10 +5,18 @@ const pageFormats = {
   letter: { width: 216, height: 279 },
 };
 
+const previewMaxDimension = 1200;
+
 const presetSettings = {
-  clean: { brightness: 12, contrast: 112, grain: 2, vignette: 4, threshold: 172 },
-  classic: { brightness: 8, contrast: 124, grain: 7, vignette: 6, threshold: 156 },
-  "high-contrast": { brightness: 4, contrast: 152, grain: 4, vignette: 4, threshold: 142 },
+  clean: { brightness: 14, contrast: 106, grain: 1, vignette: 2, threshold: 186, shadowBoost: 0.14 },
+  classic: { brightness: 7, contrast: 126, grain: 5, vignette: 4, threshold: 164, shadowBoost: 0.26 },
+  "high-contrast": { brightness: 2, contrast: 146, grain: 2, vignette: 1, threshold: 150, shadowBoost: 0.38 },
+};
+
+const presetDescriptions = {
+  clean: "Office scanner keeps pages light and clean with the least texture.",
+  classic: "Photocopier adds a rougher copied-paper feel with more scan texture.",
+  "high-contrast": "Receipts and forms darkens text for small print, faded paper, and sharp document edges.",
 };
 
 const broadlySupportedExtensions = new Set([
@@ -31,6 +39,7 @@ const browserNativeExtensions = new Set(["jpg", "jpeg", "png", "gif", "bmp", "we
 const state = {
   files: [],
   draggingId: null,
+  previewRenderFrame: null,
 };
 
 const elements = {
@@ -44,6 +53,7 @@ const elements = {
   pageSize: document.querySelector("#page-size"),
   scanLookToggle: document.querySelector("#scan-look-toggle"),
   preset: document.querySelector("#scan-preset"),
+  presetDescription: document.querySelector("#preset-description"),
   brightness: document.querySelector("#brightness"),
   contrast: document.querySelector("#contrast"),
   grain: document.querySelector("#grain"),
@@ -85,16 +95,42 @@ function getControls() {
 }
 
 function renderOriginalImage(sourceImage) {
+  return renderOriginalImageAtSize(sourceImage, sourceImage.width, sourceImage.height);
+}
+
+function renderOriginalImageAtSize(sourceImage, width, height) {
   const canvas = document.createElement("canvas");
-  canvas.width = sourceImage.width;
-  canvas.height = sourceImage.height;
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext("2d");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
   context.drawImage(sourceImage, 0, 0);
   return canvas;
 }
 
-function buildRenderCanvas(sourceImage, controls) {
-  return controls.useScanLook ? applyScanEffect(sourceImage, controls) : renderOriginalImage(sourceImage);
+function getScaledDimensions(sourceImage, maxDimension) {
+  if (!maxDimension) {
+    return { width: sourceImage.width, height: sourceImage.height };
+  }
+
+  const largestSide = Math.max(sourceImage.width, sourceImage.height);
+  if (largestSide <= maxDimension) {
+    return { width: sourceImage.width, height: sourceImage.height };
+  }
+
+  const scale = maxDimension / largestSide;
+  return {
+    width: Math.max(1, Math.round(sourceImage.width * scale)),
+    height: Math.max(1, Math.round(sourceImage.height * scale)),
+  };
+}
+
+function buildRenderCanvas(sourceImage, controls, options = {}) {
+  const dimensions = getScaledDimensions(sourceImage, options.maxDimension);
+  return controls.useScanLook
+    ? applyScanEffect(sourceImage, controls, dimensions)
+    : renderOriginalImageAtSize(sourceImage, dimensions.width, dimensions.height);
 }
 
 function updateScanControlState() {
@@ -111,6 +147,11 @@ function syncPresetToControls() {
   elements.contrast.value = preset.contrast;
   elements.grain.value = preset.grain;
   elements.vignette.value = preset.vignette;
+  updatePresetDescription();
+}
+
+function updatePresetDescription() {
+  elements.presetDescription.textContent = presetDescriptions[elements.preset.value];
 }
 
 function canvasToBlob(canvas, mimeType, quality) {
@@ -192,13 +233,15 @@ function loadImage(file) {
   });
 }
 
-function applyScanEffect(sourceImage, controls) {
+function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImage.width, height: sourceImage.height }) {
   const canvas = document.createElement("canvas");
-  canvas.width = sourceImage.width;
-  canvas.height = sourceImage.height;
+  canvas.width = dimensions.width;
+  canvas.height = dimensions.height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = canvas.width < sourceImage.width ? "medium" : "high";
   context.drawImage(sourceImage, 0, 0);
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -208,6 +251,7 @@ function applyScanEffect(sourceImage, controls) {
   const brightnessOffset = controls.brightness * 1.8;
   const grainAmount = controls.grain;
   const threshold = preset.threshold;
+  const shadowBoost = preset.shadowBoost;
 
   for (let index = 0; index < data.length; index += 4) {
     const red = data[index];
@@ -216,42 +260,27 @@ function applyScanEffect(sourceImage, controls) {
     const baseGray = red * 0.299 + green * 0.587 + blue * 0.114;
     const noise = (Math.random() - 0.5) * grainAmount * 2;
     const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise);
-    const binaryValue = adjustedGray >= threshold ? 255 : 0;
+    const darkness = Math.max(0, threshold - adjustedGray) / threshold;
+    const grayscaleValue = clamp(adjustedGray - (darkness * 255 * shadowBoost));
 
-    data[index] = binaryValue;
-    data[index + 1] = binaryValue;
-    data[index + 2] = binaryValue;
+    data[index] = grayscaleValue;
+    data[index + 1] = grayscaleValue;
+    data[index + 2] = grayscaleValue;
   }
 
   context.putImageData(imageData, 0, 0);
   applyPaperWash(context, canvas.width, canvas.height);
   applyVignette(context, canvas.width, canvas.height, controls.vignette);
   applyShadowEdge(context, canvas.width, canvas.height);
-  enforceBlackAndWhite(context, canvas.width, canvas.height, 244);
   return canvas;
-}
-
-function enforceBlackAndWhite(context, width, height, threshold = 128) {
-  const imageData = context.getImageData(0, 0, width, height);
-  const data = imageData.data;
-
-  for (let index = 0; index < data.length; index += 4) {
-    const grayscale = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    const binaryValue = grayscale >= threshold ? 255 : 0;
-    data[index] = binaryValue;
-    data[index + 1] = binaryValue;
-    data[index + 2] = binaryValue;
-  }
-
-  context.putImageData(imageData, 0, 0);
 }
 
 function applyPaperWash(context, width, height) {
   context.save();
   const gradient = context.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 0.02)");
-  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.06)");
-  gradient.addColorStop(1, "rgba(232, 232, 232, 0.08)");
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.01)");
+  gradient.addColorStop(0.5, "rgba(248, 248, 248, 0.04)");
+  gradient.addColorStop(1, "rgba(230, 230, 230, 0.06)");
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
   context.restore();
@@ -292,9 +321,20 @@ function applyVignette(context, width, height, strength) {
 
 function applyShadowEdge(context, width, height) {
   context.save();
-  context.fillStyle = "rgba(0, 0, 0, 0.05)";
+  context.fillStyle = "rgba(0, 0, 0, 0.035)";
   context.fillRect(0, height - Math.max(8, height * 0.015), width, Math.max(8, height * 0.015));
   context.restore();
+}
+
+function scheduleRenderPreviews() {
+  if (state.previewRenderFrame !== null) {
+    cancelAnimationFrame(state.previewRenderFrame);
+  }
+
+  state.previewRenderFrame = requestAnimationFrame(() => {
+    state.previewRenderFrame = null;
+    renderPreviews();
+  });
 }
 
 function clamp(value) {
@@ -345,7 +385,7 @@ function renderPreviews() {
     const name = fragment.querySelector(".preview-name");
     const dimensions = fragment.querySelector(".preview-dimensions");
     const removeButton = fragment.querySelector(".icon-button");
-    const rendered = buildRenderCanvas(entry.sourceImage, controls);
+    const rendered = buildRenderCanvas(entry.sourceImage, controls, { maxDimension: previewMaxDimension });
 
     card.dataset.id = entry.id;
     card.addEventListener("dragstart", onDragStart);
@@ -356,7 +396,8 @@ function renderPreviews() {
     canvas.width = rendered.width;
     canvas.height = rendered.height;
     const previewContext = canvas.getContext("2d");
-    previewContext.imageSmoothingEnabled = false;
+    previewContext.imageSmoothingEnabled = true;
+    previewContext.imageSmoothingQuality = "medium";
     previewContext.drawImage(rendered, 0, 0);
     name.textContent = entry.name;
     dimensions.textContent = `${entry.width} x ${entry.height}px`;
@@ -491,16 +532,16 @@ elements.dropzone.addEventListener("drop", (event) => {
 
 elements.preset.addEventListener("change", () => {
   syncPresetToControls();
-  renderPreviews();
+  scheduleRenderPreviews();
 });
 
 elements.scanLookToggle.addEventListener("change", () => {
   updateScanControlState();
-  renderPreviews();
+  scheduleRenderPreviews();
 });
 
 [elements.brightness, elements.contrast, elements.grain, elements.vignette].forEach((input) => {
-  input.addEventListener("input", () => renderPreviews());
+  input.addEventListener("input", () => scheduleRenderPreviews());
 });
 
 elements.downloadBtn.addEventListener("click", exportPdf);

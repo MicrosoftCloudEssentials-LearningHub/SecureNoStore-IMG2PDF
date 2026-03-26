@@ -92,30 +92,34 @@
             <label>
               <span>Mode</span>
               <select id="scan-preset">
-                <option value="clean" selected>Clean document</option>
-                <option value="classic">Classic black-and-white scan</option>
-                <option value="high-contrast">High-contrast black-and-white</option>
+                <option value="clean" selected>Office scanner</option>
+                <option value="classic">Photocopier</option>
+                <option value="high-contrast">Receipts and forms</option>
               </select>
             </label>
 
+            <p id="preset-description" class="control-hint" aria-live="polite">
+              Office scanner keeps pages light and clean with the least texture.
+            </p>
+
             <label>
               <span>Brightness</span>
-              <input id="brightness" type="range" min="-40" max="40" value="12" />
+              <input id="brightness" type="range" min="-40" max="40" value="14" />
             </label>
 
             <label>
               <span>Contrast</span>
-              <input id="contrast" type="range" min="60" max="180" value="112" />
+              <input id="contrast" type="range" min="60" max="180" value="106" />
             </label>
 
             <label>
               <span>Grain</span>
-              <input id="grain" type="range" min="0" max="24" value="2" />
+              <input id="grain" type="range" min="0" max="24" value="1" />
             </label>
 
             <label>
               <span>Edge vignette</span>
-              <input id="vignette" type="range" min="0" max="40" value="4" />
+              <input id="vignette" type="range" min="0" max="40" value="2" />
             </label>
           </div>
 

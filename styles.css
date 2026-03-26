@@ -285,6 +285,14 @@ h1 {
   font-weight: 700;
 }
 
+.control-hint {
+  grid-column: 1 / -1;
+  margin: -4px 0 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 select,
 input[type="range"] {
   width: 100%;
