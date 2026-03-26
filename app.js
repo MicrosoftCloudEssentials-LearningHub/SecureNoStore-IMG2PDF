@@ -1398,6 +1398,7 @@ function renderPreviews() {
   const overrideCount = state.files.filter((entry) => Boolean(entry.scanSettings)).length;
   const perspectiveCount = state.files.filter((entry) => Boolean(getEntryAdjustments(entry).perspectiveEnabled)).length;
   const visibleEntries = getVisibleEntries();
+  const hiddenByFilter = state.files.length > 0 && visibleEntries.length === 0 && state.pageFilters.size > 0;
 
   if (!visibleEntries.length && state.files.length) {
     const emptyState = document.createElement("div");
@@ -1469,6 +1470,13 @@ function renderPreviews() {
   elements.activeFiltersSummary.textContent = getActiveFilterSummary();
   updateDownloadButtonLabel();
   updateVisibleActionLabels();
+  if (hiddenByFilter) {
+    setStatus(
+      `${state.files.length} page${state.files.length > 1 ? "s" : ""} loaded, but the current page filter is hiding all of them. Switch the Pages filter to Show all pages to restore the preview.${elements.exportVisibleOnly.checked ? " Visible-only export is also hiding downloads." : ""}`
+    );
+    return;
+  }
+
   setStatus(
     state.files.length
       ? `${state.files.length} page${state.files.length > 1 ? "s" : ""} ready in ${controls.useScanLook ? "black-and-white scan" : "original"} mode. Showing ${visibleEntries.length}. ${selectedCount ? `${selectedCount} selected for batch actions. ` : ""}Export stays on this device.`
@@ -2414,7 +2422,7 @@ function onDragEnd(event) {
 async function exportPdf() {
   const entries = getEntriesForExport();
   if (!entries.length) {
-    setStatus("There are no pages available to export with the current filter settings.");
+    setStatus(state.files.length ? "No pages are currently visible for export. Set the Pages filter to Show all pages or turn off visible-only export." : "There are no pages available to export with the current filter settings.");
     return;
   }
 
