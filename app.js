@@ -523,7 +523,7 @@ function hasMeaningfulAdjustments(adjustments) {
   );
 }
 
-function applyDetectedDocumentAdjustments(adjustments, detectedDocument, enablePerspective = true) {
+function applyDetectedDocumentAdjustments(adjustments, detectedDocument, enablePerspective = false) {
   adjustments.corners = detectedDocument.corners;
   adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
   adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
@@ -2398,7 +2398,11 @@ async function exportPdf() {
     return;
   }
 
-  autoDetectPendingEntries(entries, qualitySettings.scaleLimit);
+  try {
+    autoDetectPendingEntries(entries, qualitySettings.scaleLimit);
+  } catch {
+    // Detection errors must never abort the export.
+  }
 
   if (!jsPDF) {
     setStatus("PDF library is still loading. Try again in a moment.");
@@ -2417,12 +2421,22 @@ async function exportPdf() {
 
   for (const [index, entry] of entries.entries()) {
     const effectiveControls = getEffectiveControls(entry, controls);
-    const rendered = buildRenderCanvas(
-      entry.sourceImage,
-      effectiveControls,
-      { maxDimension: qualitySettings.scaleLimit },
-      getEntryAdjustments(entry)
-    );
+    let rendered;
+    try {
+      rendered = buildRenderCanvas(
+        entry.sourceImage,
+        effectiveControls,
+        { maxDimension: qualitySettings.scaleLimit },
+        getEntryAdjustments(entry)
+      );
+    } catch {
+      const scaleLimit = qualitySettings.scaleLimit;
+      rendered = renderOriginalImageAtSize(
+        entry.sourceImage,
+        Math.min(entry.width, scaleLimit || entry.width),
+        Math.min(entry.height, scaleLimit || entry.height)
+      );
+    }
     const exportFormat = effectiveControls.useScanLook ? "PNG" : "JPEG";
     const dataUrl = effectiveControls.useScanLook
       ? rendered.toDataURL("image/png")
