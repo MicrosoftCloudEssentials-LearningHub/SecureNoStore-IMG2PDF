@@ -7,6 +7,9 @@ const pageFormats = {
 
 const previewMaxDimension = 1200;
 const adjustPreviewMaxDimension = 1400;
+const maxCropPercent = 45;
+const minRemainingCropPercent = 10;
+const autoDetectCropPadding = 0.012;
 
 const presetSettings = {
   clean: { brightness: 14, contrast: 106, grain: 1, vignette: 2, threshold: 186, shadowBoost: 0.14 },
@@ -108,6 +111,7 @@ const elements = {
   adjustCropRight: document.querySelector("#adjust-crop-right"),
   adjustCropBottom: document.querySelector("#adjust-crop-bottom"),
   adjustCropLeft: document.querySelector("#adjust-crop-left"),
+  adjustCropSummary: document.querySelector("#adjust-crop-summary"),
   pageSize: document.querySelector("#page-size"),
   pageMargin: document.querySelector("#page-margin"),
   imageFit: document.querySelector("#image-fit"),
@@ -545,12 +549,14 @@ function getCropRect(sourceImage, adjustments) {
 }
 
 function getCropRectForDimensions(width, height, adjustments) {
-  const cropTop = Math.min(0.25, Math.max(0, adjustments.cropTop / 100));
-  const cropRight = Math.min(0.25, Math.max(0, adjustments.cropRight / 100));
-  const cropBottom = Math.min(0.25, Math.max(0, adjustments.cropBottom / 100));
-  const cropLeft = Math.min(0.25, Math.max(0, adjustments.cropLeft / 100));
-  const croppedWidth = width * Math.max(0.2, 1 - cropLeft - cropRight);
-  const croppedHeight = height * Math.max(0.2, 1 - cropTop - cropBottom);
+  const cropLimit = maxCropPercent / 100;
+  const minRemaining = minRemainingCropPercent / 100;
+  const cropTop = Math.min(cropLimit, Math.max(0, adjustments.cropTop / 100));
+  const cropRight = Math.min(cropLimit, Math.max(0, adjustments.cropRight / 100));
+  const cropBottom = Math.min(cropLimit, Math.max(0, adjustments.cropBottom / 100));
+  const cropLeft = Math.min(cropLimit, Math.max(0, adjustments.cropLeft / 100));
+  const croppedWidth = width * Math.max(minRemaining, 1 - cropLeft - cropRight);
+  const croppedHeight = height * Math.max(minRemaining, 1 - cropTop - cropBottom);
 
   return {
     x: width * cropLeft,
@@ -651,6 +657,166 @@ function orderCorners(points) {
   return [topLeft, remaining[0], bottomRight, remaining[1]];
 }
 
+function getPolygonArea(points) {
+  let area = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += (current.x * next.y) - (next.x * current.y);
+  }
+
+  return Math.abs(area / 2);
+}
+
+function getNormalizedBounds(points) {
+  const normalizedPoints = points.map(clampNormalizedPoint);
+  const xs = normalizedPoints.map((point) => point.x);
+  const ys = normalizedPoints.map((point) => point.y);
+  const left = Math.max(0, Math.min(...xs));
+  const top = Math.max(0, Math.min(...ys));
+  const right = Math.min(1, Math.max(...xs));
+  const bottom = Math.min(1, Math.max(...ys));
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+function expandBounds(bounds, padding = 0) {
+  return {
+    left: Math.max(0, bounds.left - padding),
+    top: Math.max(0, bounds.top - padding),
+    right: Math.min(1, bounds.right + padding),
+    bottom: Math.min(1, bounds.bottom + padding),
+  };
+}
+
+function createCornersFromBounds(bounds) {
+  return [
+    { x: bounds.left, y: bounds.top },
+    { x: bounds.right, y: bounds.top },
+    { x: bounds.right, y: bounds.bottom },
+    { x: bounds.left, y: bounds.bottom },
+  ];
+}
+
+function getContourPoints(approximation, canvas) {
+  const points = [];
+
+  for (let row = 0; row < approximation.rows; row += 1) {
+    points.push({
+      x: approximation.data32S[row * 2] / canvas.width,
+      y: approximation.data32S[(row * 2) + 1] / canvas.height,
+    });
+  }
+
+  return points;
+}
+
+function scoreDocumentCandidate(points) {
+  const orderedPoints = orderCorners(points).map(clampNormalizedPoint);
+  const bounds = getNormalizedBounds(orderedPoints);
+  const polygonArea = getPolygonArea(orderedPoints);
+  const boundingArea = Math.max(0.0001, bounds.width * bounds.height);
+  const fillRatio = polygonArea / boundingArea;
+  const centerX = (bounds.left + bounds.right) / 2;
+  const centerY = (bounds.top + bounds.bottom) / 2;
+  const centerDistance = Math.hypot(centerX - 0.5, centerY - 0.5) / Math.hypot(0.5, 0.5);
+  const centerScore = 1 - Math.min(1, centerDistance);
+  const minMargin = Math.min(bounds.left, bounds.top, 1 - bounds.right, 1 - bounds.bottom);
+  const aspectRatio = bounds.width / Math.max(bounds.height, 0.0001);
+
+  if (polygonArea < 0.08 || bounds.width < 0.2 || bounds.height < 0.2) {
+    return null;
+  }
+
+  if (bounds.width > 0.99 && bounds.height > 0.99) {
+    return null;
+  }
+
+  let score = polygonArea * 5;
+  score += fillRatio * 1.8;
+  score += centerScore * 0.9;
+
+  if (minMargin < 0.008) {
+    score -= 0.45;
+  } else if (minMargin < 0.02) {
+    score -= 0.2;
+  }
+
+  if (aspectRatio < 0.35 || aspectRatio > 2.4) {
+    score -= 0.3;
+  }
+
+  return {
+    score,
+    corners: orderedPoints,
+    bounds,
+  };
+}
+
+function buildDocumentCandidate(points) {
+  const candidate = scoreDocumentCandidate(points);
+  if (!candidate) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function getBoundingRectPoints(contour, canvas) {
+  const rect = window.cv.boundingRect(contour);
+  return createCornersFromBounds({
+    left: rect.x / canvas.width,
+    top: rect.y / canvas.height,
+    right: (rect.x + rect.width) / canvas.width,
+    bottom: (rect.y + rect.height) / canvas.height,
+  });
+}
+
+function getBestDocumentCandidateFromContours(contours, canvas, preferQuadrilateral = false) {
+  let bestCandidate = null;
+
+  for (let index = 0; index < contours.size(); index += 1) {
+    const contour = contours.get(index);
+    const perimeter = window.cv.arcLength(contour, true);
+    const approx = new window.cv.Mat();
+    window.cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+    const contourArea = Math.abs(window.cv.contourArea(contour)) / (canvas.width * canvas.height);
+    let candidate = null;
+
+    if (approx.rows === 4) {
+      candidate = buildDocumentCandidate(getContourPoints(approx, canvas));
+      if (candidate) {
+        candidate.score += 0.4;
+      }
+    }
+
+    if (!candidate && !preferQuadrilateral) {
+      candidate = buildDocumentCandidate(getBoundingRectPoints(contour, canvas));
+    }
+
+    if (candidate) {
+      candidate.score += Math.min(1.2, contourArea * 1.6);
+      if (!bestCandidate || candidate.score > bestCandidate.score) {
+        bestCandidate = candidate;
+      }
+    }
+
+    contour.delete();
+    approx.delete();
+  }
+
+  return bestCandidate;
+}
+
 function applyPerspectiveCorrection(canvas, adjustments, cropRect = null, sourceCanvas = canvas) {
   if (!adjustments.perspectiveEnabled || !opencvReady()) {
     return canvas;
@@ -705,7 +871,7 @@ function applyPerspectiveCorrection(canvas, adjustments, cropRect = null, source
   return outputCanvas;
 }
 
-function detectDocumentCorners(canvas) {
+function detectDocumentShape(canvas) {
   if (!opencvReady()) {
     return null;
   }
@@ -713,50 +879,55 @@ function detectDocumentCorners(canvas) {
   const src = window.cv.imread(canvas);
   const gray = new window.cv.Mat();
   const blurred = new window.cv.Mat();
+  const thresholded = new window.cv.Mat();
+  const closed = new window.cv.Mat();
   const edged = new window.cv.Mat();
-  const contours = new window.cv.MatVector();
-  const hierarchy = new window.cv.Mat();
+  const dilatedEdges = new window.cv.Mat();
+  const maskContours = new window.cv.MatVector();
+  const maskHierarchy = new window.cv.Mat();
+  const edgeContours = new window.cv.MatVector();
+  const edgeHierarchy = new window.cv.Mat();
+  const closeKernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(11, 11));
+  const edgeKernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(5, 5));
 
   window.cv.cvtColor(src, gray, window.cv.COLOR_RGBA2GRAY, 0);
   window.cv.GaussianBlur(gray, blurred, new window.cv.Size(5, 5), 0);
-  window.cv.Canny(blurred, edged, 75, 200);
-  window.cv.findContours(edged, contours, hierarchy, window.cv.RETR_LIST, window.cv.CHAIN_APPROX_SIMPLE);
+  window.cv.adaptiveThreshold(blurred, thresholded, 255, window.cv.ADAPTIVE_THRESH_GAUSSIAN_C, window.cv.THRESH_BINARY, 31, 9);
+  window.cv.morphologyEx(thresholded, closed, window.cv.MORPH_CLOSE, closeKernel);
+  window.cv.findContours(closed, maskContours, maskHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
 
-  let bestCorners = null;
-  let largestArea = 0;
+  window.cv.Canny(blurred, edged, 60, 180);
+  window.cv.dilate(edged, dilatedEdges, edgeKernel);
+  window.cv.findContours(dilatedEdges, edgeContours, edgeHierarchy, window.cv.RETR_LIST, window.cv.CHAIN_APPROX_SIMPLE);
 
-  for (let index = 0; index < contours.size(); index += 1) {
-    const contour = contours.get(index);
-    const perimeter = window.cv.arcLength(contour, true);
-    const approx = new window.cv.Mat();
-    window.cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
-
-    if (approx.rows === 4) {
-      const area = Math.abs(window.cv.contourArea(approx));
-      if (area > largestArea) {
-        const points = [];
-        for (let row = 0; row < 4; row += 1) {
-          points.push({
-            x: approx.data32S[row * 2] / canvas.width,
-            y: approx.data32S[(row * 2) + 1] / canvas.height,
-          });
-        }
-        bestCorners = orderCorners(points).map(clampNormalizedPoint);
-        largestArea = area;
-      }
-    }
-
-    contour.delete();
-    approx.delete();
-  }
+  const maskCandidate = getBestDocumentCandidateFromContours(maskContours, canvas, false);
+  const edgeCandidate = getBestDocumentCandidateFromContours(edgeContours, canvas, true);
+  const bestCandidate = [maskCandidate, edgeCandidate]
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score)[0] || null;
 
   src.delete();
   gray.delete();
   blurred.delete();
+  thresholded.delete();
+  closed.delete();
   edged.delete();
-  contours.delete();
-  hierarchy.delete();
-  return bestCorners;
+  dilatedEdges.delete();
+  maskContours.delete();
+  maskHierarchy.delete();
+  edgeContours.delete();
+  edgeHierarchy.delete();
+  closeKernel.delete();
+  edgeKernel.delete();
+
+  if (!bestCandidate) {
+    return null;
+  }
+
+  return {
+    corners: bestCandidate.corners,
+    bounds: expandBounds(bestCandidate.bounds, autoDetectCropPadding),
+  };
 }
 
 function buildRenderCanvas(sourceImage, controls, options = {}, adjustments = createDefaultAdjustments()) {
@@ -1392,6 +1563,7 @@ function openAdjustPanel(id) {
     return;
   }
 
+  setAdjustCropSummaryVisibility(false);
   syncAdjustInputs(entry);
   elements.adjustApplySelected.disabled = getSelectedEntries().length === 0;
   elements.adjustOverlay.classList.remove("hidden");
@@ -1401,6 +1573,7 @@ function openAdjustPanel(id) {
 
 function closeAdjustPanel() {
   state.activeAdjustId = null;
+  setAdjustCropSummaryVisibility(false);
   elements.adjustApplySelected.disabled = true;
   elements.adjustOverlay.classList.add("hidden");
   elements.adjustOverlay.setAttribute("aria-hidden", "true");
@@ -1554,6 +1727,90 @@ function syncAdjustInputs(entry) {
   elements.adjustCropBottom.value = adjustments.cropBottom;
   elements.adjustCropLeft.value = adjustments.cropLeft;
   elements.adjustPerspective.checked = adjustments.perspectiveEnabled;
+  updateAdjustCropSummary(adjustments);
+}
+
+function updateAdjustCropSummary(adjustments) {
+  if (!elements.adjustCropSummary) {
+    return;
+  }
+
+  const top = Math.round(adjustments.cropTop || 0);
+  const right = Math.round(adjustments.cropRight || 0);
+  const bottom = Math.round(adjustments.cropBottom || 0);
+  const left = Math.round(adjustments.cropLeft || 0);
+  const visibleWidth = Math.max(minRemainingCropPercent, 100 - left - right);
+  const visibleHeight = Math.max(minRemainingCropPercent, 100 - top - bottom);
+
+  elements.adjustCropSummary.innerHTML = `<strong>Crop</strong> Top ${top}%, Right ${right}%, Bottom ${bottom}%, Left ${left}%. <strong>Visible area</strong> ${Math.round(visibleWidth)}% wide by ${Math.round(visibleHeight)}% high.`;
+}
+
+function setAdjustCropSummaryVisibility(isVisible) {
+  if (!elements.adjustCropSummary) {
+    return;
+  }
+
+  elements.adjustCropSummary.classList.toggle("hidden", !isVisible);
+  if (isVisible) {
+    positionCropBox();
+  }
+}
+
+function positionAdjustCropSummary(cropRect) {
+  if (!elements.adjustCropSummary || !state.adjustPreviewMetrics) {
+    return;
+  }
+
+  const { displayWidth, displayHeight, scaleX, scaleY, offsetLeft, offsetTop } = state.adjustPreviewMetrics;
+  const summaryBounds = elements.adjustCropSummary.getBoundingClientRect();
+  const summaryWidth = Math.min(summaryBounds.width || 260, Math.max(140, displayWidth - 16));
+  const summaryHeight = summaryBounds.height || 62;
+  const cropLeft = offsetLeft + (cropRect.x * scaleX);
+  const cropTop = offsetTop + (cropRect.y * scaleY);
+  const cropWidth = cropRect.width * scaleX;
+  const cropHeight = cropRect.height * scaleY;
+  const minLeft = offsetLeft + 8;
+  const maxLeft = offsetLeft + displayWidth - summaryWidth - 8;
+  const preferredLeft = cropLeft + 12;
+  const left = Math.max(minLeft, Math.min(maxLeft, preferredLeft));
+  const preferredTop = cropTop - summaryHeight - 12;
+  const fallbackTop = cropTop + cropHeight + 12;
+  const minTop = offsetTop + 8;
+  const maxTop = offsetTop + displayHeight - summaryHeight - 8;
+  const top = preferredTop >= minTop
+    ? preferredTop
+    : Math.max(minTop, Math.min(maxTop, fallbackTop));
+
+  elements.adjustCropSummary.style.left = `${left}px`;
+  elements.adjustCropSummary.style.top = `${top}px`;
+}
+
+function updateAdjustPreviewMetrics() {
+  const sourceWidth = elements.adjustPreviewCanvas.width;
+  const sourceHeight = elements.adjustPreviewCanvas.height;
+
+  if (!sourceWidth || !sourceHeight) {
+    state.adjustPreviewMetrics = null;
+    return null;
+  }
+
+  const canvasBounds = elements.adjustPreviewCanvas.getBoundingClientRect();
+  const surfaceBounds = elements.adjustPreviewSurface.getBoundingClientRect();
+  const displayWidth = canvasBounds.width || sourceWidth;
+  const displayHeight = canvasBounds.height || sourceHeight;
+
+  state.adjustPreviewMetrics = {
+    sourceWidth,
+    sourceHeight,
+    displayWidth,
+    displayHeight,
+    scaleX: displayWidth / sourceWidth,
+    scaleY: displayHeight / sourceHeight,
+    offsetLeft: canvasBounds.left - surfaceBounds.left,
+    offsetTop: canvasBounds.top - surfaceBounds.top,
+  };
+
+  return state.adjustPreviewMetrics;
 }
 
 function positionCropBox() {
@@ -1563,16 +1820,20 @@ function positionCropBox() {
   }
 
   const cropRect = getCropRectForDimensions(
-    state.adjustPreviewMetrics.width,
-    state.adjustPreviewMetrics.height,
+    state.adjustPreviewMetrics.sourceWidth,
+    state.adjustPreviewMetrics.sourceHeight,
     getEntryAdjustments(entry)
   );
-  elements.cropOverlay.style.width = `${state.adjustPreviewMetrics.width}px`;
-  elements.cropOverlay.style.height = `${state.adjustPreviewMetrics.height}px`;
-  elements.cropBox.style.left = `${cropRect.x}px`;
-  elements.cropBox.style.top = `${cropRect.y}px`;
-  elements.cropBox.style.width = `${cropRect.width}px`;
-  elements.cropBox.style.height = `${cropRect.height}px`;
+  const { displayWidth, displayHeight, scaleX, scaleY, offsetLeft, offsetTop } = state.adjustPreviewMetrics;
+  elements.cropOverlay.style.left = `${offsetLeft}px`;
+  elements.cropOverlay.style.top = `${offsetTop}px`;
+  elements.cropOverlay.style.width = `${displayWidth}px`;
+  elements.cropOverlay.style.height = `${displayHeight}px`;
+  elements.cropBox.style.left = `${cropRect.x * scaleX}px`;
+  elements.cropBox.style.top = `${cropRect.y * scaleY}px`;
+  elements.cropBox.style.width = `${cropRect.width * scaleX}px`;
+  elements.cropBox.style.height = `${cropRect.height * scaleY}px`;
+  positionAdjustCropSummary(cropRect);
 }
 
 function positionCornerHandles() {
@@ -1581,11 +1842,15 @@ function positionCornerHandles() {
     return;
   }
 
-  const { width, height } = state.adjustPreviewMetrics;
+  const { displayWidth, displayHeight, offsetLeft, offsetTop } = state.adjustPreviewMetrics;
+  elements.cornerOverlay.style.left = `${offsetLeft}px`;
+  elements.cornerOverlay.style.top = `${offsetTop}px`;
+  elements.cornerOverlay.style.width = `${displayWidth}px`;
+  elements.cornerOverlay.style.height = `${displayHeight}px`;
   getEntryAdjustments(entry).corners.forEach((point, index) => {
     const handle = elements.cornerHandles[index];
-    handle.style.left = `${point.x * width}px`;
-    handle.style.top = `${point.y * height}px`;
+    handle.style.left = `${point.x * displayWidth}px`;
+    handle.style.top = `${point.y * displayHeight}px`;
   });
 }
 
@@ -1619,13 +1884,8 @@ function renderAdjustPreview() {
   resultContext.imageSmoothingQuality = "medium";
   resultContext.drawImage(correctedCanvas, 0, 0);
 
-  state.adjustPreviewMetrics = {
-    width: baseCanvas.width,
-    height: baseCanvas.height,
-  };
+  updateAdjustPreviewMetrics();
   positionCropBox();
-  elements.cornerOverlay.style.width = `${baseCanvas.width}px`;
-  elements.cornerOverlay.style.height = `${baseCanvas.height}px`;
   elements.cornerOverlay.classList.toggle("hidden", !getEntryAdjustments(entry).perspectiveEnabled);
   elements.cornerOverlay.setAttribute("aria-hidden", String(!getEntryAdjustments(entry).perspectiveEnabled));
   positionCornerHandles();
@@ -1650,36 +1910,37 @@ function updateCropAdjustmentFromPoint(edge, normalizedPoint) {
   }
 
   const adjustments = getEntryAdjustments(entry);
+  const maxCombinedCrop = 100 - minRemainingCropPercent;
 
   if (edge === "top") {
-    adjustments.cropTop = Math.max(0, Math.min(25, normalizedPoint.y * 100));
+    adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, normalizedPoint.y * 100));
   }
 
   if (edge === "right") {
-    adjustments.cropRight = Math.max(0, Math.min(25, (1 - normalizedPoint.x) * 100));
+    adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - normalizedPoint.x) * 100));
   }
 
   if (edge === "bottom") {
-    adjustments.cropBottom = Math.max(0, Math.min(25, (1 - normalizedPoint.y) * 100));
+    adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, (1 - normalizedPoint.y) * 100));
   }
 
   if (edge === "left") {
-    adjustments.cropLeft = Math.max(0, Math.min(25, normalizedPoint.x * 100));
+    adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, normalizedPoint.x * 100));
   }
 
-  if (adjustments.cropTop + adjustments.cropBottom > 80) {
+  if (adjustments.cropTop + adjustments.cropBottom > maxCombinedCrop) {
     if (edge === "top") {
-      adjustments.cropTop = 80 - adjustments.cropBottom;
+      adjustments.cropTop = maxCombinedCrop - adjustments.cropBottom;
     } else {
-      adjustments.cropBottom = 80 - adjustments.cropTop;
+      adjustments.cropBottom = maxCombinedCrop - adjustments.cropTop;
     }
   }
 
-  if (adjustments.cropLeft + adjustments.cropRight > 80) {
+  if (adjustments.cropLeft + adjustments.cropRight > maxCombinedCrop) {
     if (edge === "left") {
-      adjustments.cropLeft = 80 - adjustments.cropRight;
+      adjustments.cropLeft = maxCombinedCrop - adjustments.cropRight;
     } else {
-      adjustments.cropRight = 80 - adjustments.cropLeft;
+      adjustments.cropRight = maxCombinedCrop - adjustments.cropLeft;
     }
   }
 
@@ -1688,6 +1949,7 @@ function updateCropAdjustmentFromPoint(edge, normalizedPoint) {
 
 function handleCropPointerDown(event) {
   state.activeCropEdge = event.currentTarget.dataset.edge;
+  setAdjustCropSummaryVisibility(true);
   event.currentTarget.setPointerCapture(event.pointerId);
 }
 
@@ -1699,16 +1961,16 @@ function shiftCropWindow(horizontalDelta, verticalDelta) {
 
   const adjustments = getEntryAdjustments(entry);
   const safeHorizontalDelta = horizontalDelta >= 0
-    ? Math.min(horizontalDelta, adjustments.cropRight, 25 - adjustments.cropLeft)
-    : -Math.min(-horizontalDelta, adjustments.cropLeft, 25 - adjustments.cropRight);
+    ? Math.min(horizontalDelta, adjustments.cropRight, maxCropPercent - adjustments.cropLeft)
+    : -Math.min(-horizontalDelta, adjustments.cropLeft, maxCropPercent - adjustments.cropRight);
   const safeVerticalDelta = verticalDelta >= 0
-    ? Math.min(verticalDelta, adjustments.cropBottom, 25 - adjustments.cropTop)
-    : -Math.min(-verticalDelta, adjustments.cropTop, 25 - adjustments.cropBottom);
+    ? Math.min(verticalDelta, adjustments.cropBottom, maxCropPercent - adjustments.cropTop)
+    : -Math.min(-verticalDelta, adjustments.cropTop, maxCropPercent - adjustments.cropBottom);
 
-  adjustments.cropLeft = Math.max(0, Math.min(25, adjustments.cropLeft + safeHorizontalDelta));
-  adjustments.cropRight = Math.max(0, Math.min(25, adjustments.cropRight - safeHorizontalDelta));
-  adjustments.cropTop = Math.max(0, Math.min(25, adjustments.cropTop + safeVerticalDelta));
-  adjustments.cropBottom = Math.max(0, Math.min(25, adjustments.cropBottom - safeVerticalDelta));
+  adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, adjustments.cropLeft + safeHorizontalDelta));
+  adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, adjustments.cropRight - safeHorizontalDelta));
+  adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, adjustments.cropTop + safeVerticalDelta));
+  adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, adjustments.cropBottom - safeVerticalDelta));
   syncAdjustInputs(entry);
 }
 
@@ -1720,6 +1982,7 @@ function handleCropBoxPointerDown(event) {
   event.preventDefault();
   state.activeCropEdge = "move";
   state.activeCropPointer = { x: event.clientX, y: event.clientY };
+  setAdjustCropSummaryVisibility(true);
   elements.cropBox.setPointerCapture(event.pointerId);
 }
 
@@ -1744,6 +2007,7 @@ function handleCropBoxPointerUp(event) {
 
   state.activeCropEdge = null;
   state.activeCropPointer = null;
+  setAdjustCropSummaryVisibility(false);
   elements.cropBox.releasePointerCapture(event.pointerId);
 }
 
@@ -1764,6 +2028,7 @@ function handleCropPointerMove(event) {
 
 function handleCropPointerUp(event) {
   state.activeCropEdge = null;
+  setAdjustCropSummaryVisibility(false);
   event.currentTarget.releasePointerCapture(event.pointerId);
 }
 
@@ -1802,10 +2067,10 @@ function handleCropKeydown(event) {
   }
 
   event.preventDefault();
-  adjustments.cropTop = Math.max(0, Math.min(25, adjustments.cropTop));
-  adjustments.cropRight = Math.max(0, Math.min(25, adjustments.cropRight));
-  adjustments.cropBottom = Math.max(0, Math.min(25, adjustments.cropBottom));
-  adjustments.cropLeft = Math.max(0, Math.min(25, adjustments.cropLeft));
+  adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, adjustments.cropTop));
+  adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, adjustments.cropRight));
+  adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, adjustments.cropBottom));
+  adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, adjustments.cropLeft));
   syncAdjustInputs(entry);
   renderAdjustPreview();
   scheduleRenderPreviews();
@@ -1898,17 +2163,24 @@ function autoDetectActiveDocument() {
   }
 
   const baseCanvas = getBaseAdjustedCanvas(entry.sourceImage, getEntryAdjustments(entry), adjustPreviewMaxDimension);
-  const detectedCorners = detectDocumentCorners(baseCanvas);
-  if (!detectedCorners) {
+  const detectedDocument = detectDocumentShape(baseCanvas);
+  if (!detectedDocument) {
     setStatus(opencvReady() ? "Could not detect document edges automatically. Adjust the corners manually." : "OpenCV is still loading. Try auto detect again in a moment, or adjust corners manually.");
     return;
   }
 
-  getEntryAdjustments(entry).corners = detectedCorners;
-  getEntryAdjustments(entry).perspectiveEnabled = true;
+  const adjustments = getEntryAdjustments(entry);
+  adjustments.corners = detectedDocument.corners;
+  adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
+  adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
+  adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.bottom) * 100));
+  adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.left * 100));
+  adjustments.perspectiveEnabled = true;
+  syncAdjustInputs(entry);
   elements.adjustPerspective.checked = true;
   renderAdjustPreview();
   scheduleRenderPreviews();
+  setStatus("Detected the sheet bounds and cropped away the surrounding photo background. Fine-tune the box if needed.");
 }
 
 function clearAll() {
@@ -2110,6 +2382,16 @@ elements.adjustOverlay.addEventListener("click", (event) => {
   if (event.target === elements.adjustOverlay) {
     closeAdjustPanel();
   }
+});
+
+window.addEventListener("resize", () => {
+  if (!state.activeAdjustId) {
+    return;
+  }
+
+  updateAdjustPreviewMetrics();
+  positionCropBox();
+  positionCornerHandles();
 });
 
 elements.downloadBtn.addEventListener("click", exportOutput);

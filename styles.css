@@ -717,6 +717,31 @@ button:disabled {
   max-width: 100%;
 }
 
+.adjust-crop-summary {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 3;
+  max-width: min(320px, calc(100% - 28px));
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.92);
+  border: 1px solid rgba(74, 58, 39, 0.12);
+  box-shadow: 0 10px 24px rgba(30, 26, 22, 0.12);
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.adjust-crop-summary.hidden {
+  display: none;
+}
+
+.adjust-crop-summary strong {
+  color: var(--ink);
+}
+
 .adjust-preview-frame canvas {
   max-width: 100%;
   max-height: 62vh;
@@ -734,6 +759,7 @@ button:disabled {
   box-shadow: 0 0 0 9999px rgba(30, 26, 22, 0.18);
   pointer-events: auto;
   cursor: move;
+  touch-action: none;
 }
 
 .crop-box:focus-visible {
@@ -747,6 +773,7 @@ button:disabled {
   background: var(--accent-dark);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
   pointer-events: auto;
+  touch-action: none;
 }
 
 .crop-handle:focus-visible {
@@ -818,6 +845,7 @@ button:disabled {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
   pointer-events: auto;
   cursor: grab;
+  touch-action: none;
 }
 
 .corner-handle:active {

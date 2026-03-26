@@ -350,6 +350,7 @@
               <p class="adjust-preview-label">Source view</p>
               <div id="adjust-preview-surface" class="adjust-preview-surface">
                 <canvas id="adjust-preview-canvas"></canvas>
+                <div id="adjust-crop-summary" class="adjust-crop-summary hidden" aria-live="polite"></div>
                 <div id="crop-overlay" class="crop-overlay" aria-hidden="true">
                   <div id="crop-box" class="crop-box" tabindex="0" aria-label="Move crop area">
                     <button class="crop-handle crop-handle-top" data-edge="top" type="button" aria-label="Adjust crop top"></button>
@@ -387,19 +388,19 @@
             </label>
             <label>
               <span>Crop top</span>
-              <input id="adjust-crop-top" type="range" min="0" max="25" step="1" value="0" />
+              <input id="adjust-crop-top" type="range" min="0" max="45" step="1" value="0" />
             </label>
             <label>
               <span>Crop right</span>
-              <input id="adjust-crop-right" type="range" min="0" max="25" step="1" value="0" />
+              <input id="adjust-crop-right" type="range" min="0" max="45" step="1" value="0" />
             </label>
             <label>
               <span>Crop bottom</span>
-              <input id="adjust-crop-bottom" type="range" min="0" max="25" step="1" value="0" />
+              <input id="adjust-crop-bottom" type="range" min="0" max="45" step="1" value="0" />
             </label>
             <label>
               <span>Crop left</span>
-              <input id="adjust-crop-left" type="range" min="0" max="25" step="1" value="0" />
+              <input id="adjust-crop-left" type="range" min="0" max="45" step="1" value="0" />
             </label>
 
             <div class="adjust-actions">
