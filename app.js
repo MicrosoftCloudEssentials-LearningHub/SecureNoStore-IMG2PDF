@@ -523,7 +523,7 @@ function hasMeaningfulAdjustments(adjustments) {
   );
 }
 
-function applyDetectedDocumentAdjustments(adjustments, detectedDocument, enablePerspective = false) {
+function applyDetectedDocumentAdjustments(adjustments, detectedDocument, enablePerspective = true) {
   adjustments.corners = detectedDocument.corners;
   adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
   adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
@@ -1862,6 +1862,7 @@ function updateActiveAdjustments() {
     return;
   }
 
+  const existing = getEntryAdjustments(entry);
   entry.adjustments = {
     rotate: Number(elements.adjustRotate.value),
     cropTop: Number(elements.adjustCropTop.value),
@@ -1869,7 +1870,10 @@ function updateActiveAdjustments() {
     cropBottom: Number(elements.adjustCropBottom.value),
     cropLeft: Number(elements.adjustCropLeft.value),
     perspectiveEnabled: elements.adjustPerspective.checked,
-    corners: getEntryAdjustments(entry).corners,
+    corners: existing.corners,
+    autoDetected: existing.autoDetected,
+    autoDetectionTried: existing.autoDetectionTried,
+    autoDetectionMaxDimension: existing.autoDetectionMaxDimension,
   };
 }
 
