@@ -1393,6 +1393,7 @@ function renderPreviews() {
     // Detection errors must never block rendering.
   }
   elements.previewList.innerHTML = "";
+  const recoveredHiddenFilter = clearHiddenPageFilterIfNeeded();
   const controls = getControls();
   const selectedCount = getSelectedEntries().length;
   const overrideCount = state.files.filter((entry) => Boolean(entry.scanSettings)).length;
@@ -1479,7 +1480,7 @@ function renderPreviews() {
 
   setStatus(
     state.files.length
-      ? `${state.files.length} page${state.files.length > 1 ? "s" : ""} ready in ${controls.useScanLook ? "black-and-white scan" : "original"} mode. Showing ${visibleEntries.length}. ${selectedCount ? `${selectedCount} selected for batch actions. ` : ""}Export stays on this device.`
+      ? `${state.files.length} page${state.files.length > 1 ? "s" : ""} ready in ${controls.useScanLook ? "black-and-white scan" : "original"} mode. Showing ${visibleEntries.length}. ${selectedCount ? `${selectedCount} selected for batch actions. ` : ""}${recoveredHiddenFilter ? "A saved page filter was reset so your pages are visible again. " : ""}Export stays on this device.`
       : "Add images to start building a local PDF."
   );
 }
