@@ -121,10 +121,129 @@
               <span>Edge vignette</span>
               <input id="vignette" type="range" min="0" max="40" value="2" />
             </label>
+
+            <label>
+              <span>Page margin</span>
+              <input id="page-margin" type="range" min="0" max="20" value="8" />
+            </label>
+
+            <label>
+              <span>Image fit</span>
+              <select id="image-fit">
+                <option value="contain" selected>Fit inside page</option>
+                <option value="cover">Fill page</option>
+              </select>
+            </label>
+
+            <label>
+              <span>PDF quality</span>
+              <select id="pdf-quality">
+                <option value="compact">Compact</option>
+                <option value="standard" selected>Standard</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Download as</span>
+              <select id="export-format">
+                <option value="pdf" selected>PDF</option>
+                <option value="jpg">JPG page set (.zip)</option>
+                <option value="png">PNG page set (.zip)</option>
+              </select>
+            </label>
+
+            <label>
+              <span>OCR language</span>
+              <select id="ocr-language">
+                <option value="eng" selected>English</option>
+                <option value="eng+spa">English + Spanish</option>
+                <option value="eng+fra">English + French</option>
+                <option value="eng+deu">English + German</option>
+                <option value="eng+por">English + Portuguese</option>
+                <option value="eng+ita">English + Italian</option>
+                <option value="eng+nld">English + Dutch</option>
+                <option value="eng+pol">English + Polish</option>
+                <option value="eng+tur">English + Turkish</option>
+                <option value="eng+rus">English + Russian</option>
+                <option value="eng+ukr">English + Ukrainian</option>
+                <option value="eng+ara">English + Arabic</option>
+                <option value="eng+hin">English + Hindi</option>
+                <option value="eng+jpn">English + Japanese</option>
+                <option value="eng+kor">English + Korean</option>
+                <option value="eng+chi_sim">English + Simplified Chinese</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Custom OCR code</span>
+              <input id="ocr-language-custom" type="text" placeholder="Example: eng+spa or deu" spellcheck="false" />
+            </label>
+
+            <label class="checkbox-control">
+              <span>Auto background cleanup</span>
+              <input id="auto-cleanup" type="checkbox" checked />
+            </label>
+
+            <label class="checkbox-control">
+              <span>Select detected blanks first</span>
+              <input id="select-detected-blanks" type="checkbox" checked />
+            </label>
+
+            <label class="checkbox-control">
+              <span>Export visible pages only</span>
+              <input id="export-visible-only" type="checkbox" />
+            </label>
           </div>
+
+          <section class="automation-panel" aria-labelledby="automation-title">
+            <div class="automation-header">
+              <div>
+                <p class="section-label">Automation</p>
+                <h3 id="automation-title">Saved Preferences</h3>
+              </div>
+              <p class="section-note">Keep repetitive review and export settings on this device.</p>
+            </div>
+
+            <div class="automation-grid">
+              <label class="checkbox-control">
+                <span>Always use visible-only export</span>
+                <input id="pref-always-visible-export" type="checkbox" />
+              </label>
+
+              <label class="checkbox-control">
+                <span>Remember OCR language</span>
+                <input id="pref-remember-ocr-language" type="checkbox" checked />
+              </label>
+
+              <label class="checkbox-control">
+                <span>Remember review preset</span>
+                <input id="pref-remember-review-preset" type="checkbox" checked />
+              </label>
+
+              <label class="checkbox-control">
+                <span>Auto-select after review preset</span>
+                <input id="pref-auto-select-review-preset" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="export-preset-bar" role="toolbar" aria-label="Saved export presets">
+              <button class="export-preset-button" type="button" data-export-preset="archive-pdf">Archive PDF</button>
+              <button class="export-preset-button" type="button" data-export-preset="visible-review-zip">Visible review ZIP</button>
+              <button class="export-preset-button" type="button" data-export-preset="ocr-review-mode">OCR review mode</button>
+            </div>
+          </section>
 
           <div class="actions-row">
             <button id="download-btn" class="primary-button" disabled>Download PDF</button>
+            <button id="ocr-btn" class="secondary-button" disabled>Extract Text</button>
+            <button id="ocr-visible-btn" class="secondary-button" disabled>Extract Visible Text</button>
+            <button id="ocr-selected-btn" class="secondary-button" disabled>Extract Selected Text</button>
+            <button id="apply-scan-selected-btn" class="secondary-button" disabled>Apply Scan to Selected</button>
+            <button id="clear-scan-selected-btn" class="secondary-button" disabled>Clear Selected Scan Override</button>
+            <button id="keep-selected-btn" class="secondary-button" disabled>Keep Selected Only</button>
+            <button id="remove-blank-btn" class="secondary-button" disabled>Select Blank Pages</button>
+            <button id="remove-selected-btn" class="secondary-button" disabled>Remove Selected Pages</button>
             <button id="clear-btn" class="secondary-button" disabled>Clear</button>
           </div>
 
@@ -139,8 +258,45 @@
               <p class="section-label">Pages</p>
               <h2>Preview queue</h2>
             </div>
-            <p class="section-note">Drag pages to reorder before export.</p>
+            <div class="preview-toolbar">
+              <p class="section-note">Drag pages to reorder and select pages for batch apply.</p>
+              <div class="preview-toolbar-actions">
+                <button id="select-all-btn" class="secondary-button" type="button" disabled>Select all</button>
+                <button id="select-scan-overrides-btn" class="secondary-button" type="button" disabled>Select scan overrides</button>
+                <button id="select-perspective-pages-btn" class="secondary-button" type="button" disabled>Select perspective corrected</button>
+                <button id="clear-selection-btn" class="secondary-button" type="button" disabled>Clear selection</button>
+              </div>
+            </div>
           </div>
+          <div class="filter-preset-bar" role="toolbar" aria-label="Saved review presets">
+            <button class="filter-preset-button" type="button" data-preset="review-blanks">Review blanks</button>
+            <button class="filter-preset-button" type="button" data-preset="review-overrides">Review overrides</button>
+            <button class="filter-preset-button" type="button" data-preset="review-perspective">Review perspective fixes</button>
+          </div>
+          <div class="page-filter-bar" role="toolbar" aria-label="Page filters">
+            <button id="reset-filters-btn" class="secondary-button" type="button">Reset filters</button>
+            <button class="filter-chip is-active" type="button" data-filter="all">
+              <span class="filter-chip-label">All</span>
+              <span class="filter-chip-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="selected">
+              <span class="filter-chip-label">Selected</span>
+              <span class="filter-chip-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="blank">
+              <span class="filter-chip-label">Blank candidate</span>
+              <span class="filter-chip-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="scan-override">
+              <span class="filter-chip-label">Scan override</span>
+              <span class="filter-chip-count">0</span>
+            </button>
+            <button class="filter-chip" type="button" data-filter="perspective">
+              <span class="filter-chip-label">Perspective corrected</span>
+              <span class="filter-chip-count">0</span>
+            </button>
+          </div>
+          <p id="active-filters-summary" class="active-filters-summary">Showing all pages.</p>
           <div id="preview-list" class="preview-list" aria-live="polite"></div>
         </section>
       </main>
@@ -148,6 +304,15 @@
 
     <template id="preview-template">
       <article class="preview-card" draggable="true">
+        <label class="preview-select">
+          <input class="select-page-toggle" type="checkbox" />
+          <span>Select page</span>
+        </label>
+        <div class="preview-chips">
+          <span class="preview-badge blank-candidate-badge hidden" title="This page was auto-detected as likely blank during blank-page review.">Blank candidate</span>
+          <span class="preview-badge scan-override-badge hidden" title="This page uses page-specific scan settings instead of the global scan controls.">Scan override</span>
+          <span class="preview-badge perspective-badge hidden" title="Perspective correction is enabled for this page to flatten a photographed document.">Perspective corrected</span>
+        </div>
         <div class="preview-frame">
           <canvas></canvas>
         </div>
@@ -156,14 +321,103 @@
             <p class="preview-name"></p>
             <p class="preview-dimensions"></p>
           </div>
-          <button class="icon-button" type="button" aria-label="Remove page">Remove</button>
+          <div class="preview-actions">
+            <button class="icon-button rotate-left-button" type="button" aria-label="Rotate page left">Rotate Left</button>
+            <button class="icon-button rotate-right-button" type="button" aria-label="Rotate page right">Rotate Right</button>
+            <button class="icon-button duplicate-button" type="button" aria-label="Duplicate page">Duplicate</button>
+            <button class="icon-button adjust-button" type="button">Adjust</button>
+            <button class="icon-button remove-button" type="button" aria-label="Remove page">Remove</button>
+          </div>
         </div>
       </article>
     </template>
 
+    <div id="adjust-overlay" class="adjust-overlay hidden" aria-hidden="true">
+      <section class="adjust-panel" role="dialog" aria-modal="true" aria-labelledby="adjust-title">
+        <div class="adjust-header">
+          <div>
+            <p class="section-label">Page Adjust</p>
+            <h2 id="adjust-title">Straighten and crop</h2>
+          </div>
+          <button id="adjust-close" class="icon-button" type="button">Close</button>
+        </div>
+
+        <p class="adjust-copy">Use these controls when a form or receipt is tilted, too wide, or has extra background around the page.</p>
+
+        <div class="adjust-layout">
+          <div class="adjust-preview-grid">
+            <div class="adjust-preview-frame">
+              <p class="adjust-preview-label">Source view</p>
+              <div id="adjust-preview-surface" class="adjust-preview-surface">
+                <canvas id="adjust-preview-canvas"></canvas>
+                <div id="crop-overlay" class="crop-overlay" aria-hidden="true">
+                  <div id="crop-box" class="crop-box" tabindex="0" aria-label="Move crop area">
+                    <button class="crop-handle crop-handle-top" data-edge="top" type="button" aria-label="Adjust crop top"></button>
+                    <button class="crop-handle crop-handle-right" data-edge="right" type="button" aria-label="Adjust crop right"></button>
+                    <button class="crop-handle crop-handle-bottom" data-edge="bottom" type="button" aria-label="Adjust crop bottom"></button>
+                    <button class="crop-handle crop-handle-left" data-edge="left" type="button" aria-label="Adjust crop left"></button>
+                  </div>
+                </div>
+                <div id="corner-overlay" class="corner-overlay hidden" aria-hidden="true">
+                  <button class="corner-handle" data-corner="0" type="button" aria-label="Top left corner"></button>
+                  <button class="corner-handle" data-corner="1" type="button" aria-label="Top right corner"></button>
+                  <button class="corner-handle" data-corner="2" type="button" aria-label="Bottom right corner"></button>
+                  <button class="corner-handle" data-corner="3" type="button" aria-label="Bottom left corner"></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="adjust-preview-frame">
+              <p class="adjust-preview-label">Corrected result</p>
+              <canvas id="adjust-result-canvas"></canvas>
+            </div>
+          </div>
+
+          <div class="adjust-controls">
+            <label class="adjust-toggle">
+              <span>Perspective correct</span>
+              <input id="adjust-perspective" type="checkbox" />
+            </label>
+
+            <button id="adjust-auto-detect" class="secondary-button" type="button">Auto detect document</button>
+
+            <label>
+              <span>Straighten</span>
+              <input id="adjust-rotate" type="range" min="-12" max="12" step="0.5" value="0" />
+            </label>
+            <label>
+              <span>Crop top</span>
+              <input id="adjust-crop-top" type="range" min="0" max="25" step="1" value="0" />
+            </label>
+            <label>
+              <span>Crop right</span>
+              <input id="adjust-crop-right" type="range" min="0" max="25" step="1" value="0" />
+            </label>
+            <label>
+              <span>Crop bottom</span>
+              <input id="adjust-crop-bottom" type="range" min="0" max="25" step="1" value="0" />
+            </label>
+            <label>
+              <span>Crop left</span>
+              <input id="adjust-crop-left" type="range" min="0" max="25" step="1" value="0" />
+            </label>
+
+            <div class="adjust-actions">
+              <button id="adjust-reset" class="secondary-button" type="button">Reset</button>
+              <button id="adjust-apply-selected" class="secondary-button" type="button">Apply to Selected Pages</button>
+              <button id="adjust-done" class="primary-button" type="button">Done</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.min.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
     <script src="./app.js" defer></script>
   </body>
 </html>
