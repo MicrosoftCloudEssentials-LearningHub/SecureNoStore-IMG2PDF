@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-label="Synthetic whiteboard fixture">
+  <rect width="1600" height="900" fill="#d8c3a4"/>
+  <rect x="72" y="62" width="1456" height="776" rx="28" fill="#faf8f2" stroke="#81715c" stroke-width="10"/>
+  <text x="130" y="160" font-family="Verdana, sans-serif" font-size="52" font-weight="700" fill="#23303d">Project Notes</text>
+  <g font-family="Verdana, sans-serif" fill="#3a4b59">
+    <text x="140" y="250" font-size="34">1. Import photos locally</text>
+    <text x="140" y="320" font-size="34">2. Generate scanned preview</text>
+    <text x="140" y="390" font-size="34">3. Download PDF</text>
+  </g>
+  <g stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M940 230 C1050 140, 1240 170, 1320 250" stroke="#c64b3c"/>
+    <path d="M920 300 C1060 380, 1230 360, 1360 280" stroke="#326a9d"/>
+    <path d="M930 430 C1060 500, 1250 510, 1370 430" stroke="#4d7b3c"/>
+  </g>
+  <g fill="#425265" font-family="Courier New, monospace">
+    <text x="930" y="600" font-size="28">if (images.length) {</text>
+    <text x="980" y="650" font-size="28">renderPreview();</text>
+    <text x="980" y="700" font-size="28">downloadPdf();</text>
+    <text x="930" y="750" font-size="28">}</text>
+  </g>
+</svg>

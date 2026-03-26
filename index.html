@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafeScan IMG2PDF</title>
+    <meta
+      name="description"
+      content="Convert photos into realistic scanned PDFs entirely in your browser. No login, no upload, no storage."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">GitHub Pages Demo</p>
+          <h1>Turn photos into clean PDF documents right in your browser.</h1>
+          <p class="lede">
+            Add receipts, forms, notes, or whiteboard photos and get a ready-to-download PDF in seconds.
+            Everything happens on your device, so the process stays simple, private, and easy to understand.
+          </p>
+          <ul class="trust-list" aria-label="Privacy guarantees">
+            <li>
+              <strong>Your files stay on your device</strong>
+              <span>Your images are not sent to a server.</span>
+            </li>
+            <li>
+              <strong>Nothing is saved by this site</strong>
+              <span>When you close the page, your files are gone from the app.</span>
+            </li>
+            <li>
+              <strong>No account needed</strong>
+              <span>Open the page, add your images, and download the PDF.</span>
+            </li>
+          </ul>
+        </div>
+        <aside class="hero-card" aria-label="How it works">
+          <p class="card-label">Local processing</p>
+          <ol>
+            <li>Choose one or more images.</li>
+            <li>Tune the scan look.</li>
+            <li>Download a multi-page PDF.</li>
+          </ol>
+          <p class="card-note">All processing happens on-device using canvas and client-side PDF generation.</p>
+        </aside>
+      </header>
+
+      <main class="workspace">
+        <section class="panel intake-panel">
+          <div
+            id="dropzone"
+            class="dropzone"
+            tabindex="0"
+            role="button"
+            aria-describedby="dropzone-help"
+          >
+            <input id="file-input" type="file" accept="image/*" multiple hidden />
+            <div class="dropzone-content">
+              <p class="dropzone-title">Drop images here</p>
+              <p class="dropzone-subtitle">or click to browse from your device</p>
+              <p id="dropzone-help" class="dropzone-help">
+                JPG, PNG, GIF, BMP, WebP, AVIF, SVG, HEIC, HEIF, and TIFF.
+              </p>
+            </div>
+          </div>
+
+          <div class="mode-switch" role="group" aria-label="PDF appearance">
+            <p class="mode-switch-label">PDF appearance</p>
+            <label class="toggle-row" for="scan-look-toggle">
+              <span>Use scanned look</span>
+              <input id="scan-look-toggle" type="checkbox" checked />
+            </label>
+            <p class="mode-switch-note">Turn this off to export the original images without scan styling.</p>
+          </div>
+
+          <div class="controls-grid">
+            <label>
+              <span>Output paper</span>
+              <select id="page-size">
+                <option value="a4">A4</option>
+                <option value="letter">Letter</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Mode</span>
+              <select id="scan-preset">
+                <option value="clean">Clean document</option>
+                <option value="classic" selected>Classic scan</option>
+                <option value="high-contrast">High contrast</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Brightness</span>
+              <input id="brightness" type="range" min="-40" max="40" value="8" />
+            </label>
+
+            <label>
+              <span>Contrast</span>
+              <input id="contrast" type="range" min="60" max="180" value="124" />
+            </label>
+
+            <label>
+              <span>Grain</span>
+              <input id="grain" type="range" min="0" max="24" value="7" />
+            </label>
+
+            <label>
+              <span>Edge vignette</span>
+              <input id="vignette" type="range" min="0" max="40" value="14" />
+            </label>
+          </div>
+
+          <div class="actions-row">
+            <button id="download-btn" class="primary-button" disabled>Download PDF</button>
+            <button id="clear-btn" class="secondary-button" disabled>Clear</button>
+          </div>
+
+          <p id="status" class="status" aria-live="polite">
+            Add images to start building a local scanned PDF.
+          </p>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="section-label">Pages</p>
+              <h2>Preview queue</h2>
+            </div>
+            <p class="section-note">Drag pages to reorder before export.</p>
+          </div>
+          <div id="preview-list" class="preview-list" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="preview-template">
+      <article class="preview-card" draggable="true">
+        <div class="preview-frame">
+          <canvas></canvas>
+        </div>
+        <div class="preview-meta">
+          <div>
+            <p class="preview-name"></p>
+            <p class="preview-dimensions"></p>
+          </div>
+          <button class="icon-button" type="button" aria-label="Remove page">Remove</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.min.js"></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
