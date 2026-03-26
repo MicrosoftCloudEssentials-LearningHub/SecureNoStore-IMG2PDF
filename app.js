@@ -1,4 +1,18 @@
-const { jsPDF } = window.jspdf;
+const { jsPDF } = window.jspdf || {};
+
+window.addEventListener("error", (event) => {
+  const statusElement = document.querySelector("#status");
+  if (statusElement) {
+    statusElement.textContent = `Error: ${event.message || "An unexpected error occurred."}. Try reloading the page.`;
+  }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  const statusElement = document.querySelector("#status");
+  if (statusElement) {
+    statusElement.textContent = `Error: ${event.reason?.message || "An unexpected error occurred."}. Try reloading the page.`;
+  }
+});
 
 const pageFormats = {
   a4: { width: 210, height: 297 },
@@ -1375,7 +1389,11 @@ async function addFiles(fileList) {
 }
 
 function renderPreviews() {
-  autoDetectPendingEntries(state.files, previewMaxDimension);
+  try {
+    autoDetectPendingEntries(state.files, previewMaxDimension);
+  } catch {
+    // Detection errors must never block rendering.
+  }
   elements.previewList.innerHTML = "";
   const controls = getControls();
   const selectedCount = getSelectedEntries().length;
@@ -2425,6 +2443,11 @@ async function exportPdf() {
   }
 
   autoDetectPendingEntries(entries, qualitySettings.scaleLimit);
+
+  if (!jsPDF) {
+    setStatus("PDF library is still loading. Try again in a moment.");
+    return;
+  }
 
   const pageSize = pageFormats[elements.pageSize.value];
   const doc = new jsPDF({
