@@ -197,6 +197,8 @@ function applyScanEffect(sourceImage, controls) {
   canvas.width = sourceImage.width;
   canvas.height = sourceImage.height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(sourceImage, 0, 0);
 
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -225,7 +227,23 @@ function applyScanEffect(sourceImage, controls) {
   applyPaperWash(context, canvas.width, canvas.height);
   applyVignette(context, canvas.width, canvas.height, controls.vignette);
   applyShadowEdge(context, canvas.width, canvas.height);
+  enforceBlackAndWhite(context, canvas.width, canvas.height, 244);
   return canvas;
+}
+
+function enforceBlackAndWhite(context, width, height, threshold = 128) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const grayscale = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const binaryValue = grayscale >= threshold ? 255 : 0;
+    data[index] = binaryValue;
+    data[index + 1] = binaryValue;
+    data[index + 2] = binaryValue;
+  }
+
+  context.putImageData(imageData, 0, 0);
 }
 
 function applyPaperWash(context, width, height) {
@@ -322,7 +340,9 @@ function renderPreviews() {
 
     canvas.width = rendered.width;
     canvas.height = rendered.height;
-    canvas.getContext("2d").drawImage(rendered, 0, 0);
+    const previewContext = canvas.getContext("2d");
+    previewContext.imageSmoothingEnabled = false;
+    previewContext.drawImage(rendered, 0, 0);
     name.textContent = entry.name;
     dimensions.textContent = `${entry.width} x ${entry.height}px`;
     removeButton.addEventListener("click", () => removeFile(entry.id));
@@ -333,7 +353,7 @@ function renderPreviews() {
   elements.clearBtn.disabled = state.files.length === 0;
   setStatus(
     state.files.length
-      ? `${state.files.length} page${state.files.length > 1 ? "s" : ""} ready in ${controls.useScanLook ? "scanned" : "original"} mode. Export stays on this device.`
+      ? `${state.files.length} page${state.files.length > 1 ? "s" : ""} ready in ${controls.useScanLook ? "black-and-white scan" : "original"} mode. Export stays on this device.`
       : "Add images to start building a local PDF."
   );
 }
@@ -395,11 +415,14 @@ async function exportPdf() {
   });
 
   const controls = getControls();
-  setStatus(`Rendering ${controls.useScanLook ? "scanned" : "original"} PDF locally...`);
+  setStatus(`Rendering ${controls.useScanLook ? "black-and-white scan" : "original"} PDF locally...`);
 
   for (const [index, entry] of state.files.entries()) {
     const rendered = buildRenderCanvas(entry.sourceImage, controls);
-    const dataUrl = rendered.toDataURL("image/jpeg", 0.92);
+    const exportFormat = controls.useScanLook ? "PNG" : "JPEG";
+    const dataUrl = controls.useScanLook
+      ? rendered.toDataURL("image/png")
+      : rendered.toDataURL("image/jpeg", 0.92);
     const imageRatio = rendered.width / rendered.height;
     const pageRatio = pageSize.width / pageSize.height;
     const margin = 8;
@@ -419,13 +442,13 @@ async function exportPdf() {
       doc.addPage([pageSize.width, pageSize.height], pageSize.width > pageSize.height ? "landscape" : "portrait");
     }
 
-    doc.setFillColor(247, 242, 233);
+    doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageSize.width, pageSize.height, "F");
-    doc.addImage(dataUrl, "JPEG", offsetX, offsetY, renderWidth, renderHeight, undefined, "FAST");
+    doc.addImage(dataUrl, exportFormat, offsetX, offsetY, renderWidth, renderHeight, undefined, "FAST");
   }
 
   doc.save(`safescan-${Date.now()}.pdf`);
-  setStatus(`${controls.useScanLook ? "Scanned" : "Original"} PDF generated locally and downloaded.`);
+  setStatus(`${controls.useScanLook ? "Black-and-white scan" : "Original"} PDF generated locally and downloaded.`);
 }
 
 function handleDropzoneKeydown(event) {
