@@ -7,8 +7,8 @@ const pageFormats = {
 
 const presetSettings = {
   clean: { brightness: 12, contrast: 112, grain: 2, vignette: 4, threshold: 172 },
-  classic: { brightness: 8, contrast: 124, grain: 7, vignette: 14, threshold: 156 },
-  "high-contrast": { brightness: 4, contrast: 152, grain: 4, vignette: 9, threshold: 142 },
+  classic: { brightness: 8, contrast: 124, grain: 7, vignette: 6, threshold: 156 },
+  "high-contrast": { brightness: 4, contrast: 152, grain: 4, vignette: 4, threshold: 142 },
 };
 
 const broadlySupportedExtensions = new Set([
@@ -258,20 +258,35 @@ function applyPaperWash(context, width, height) {
 }
 
 function applyVignette(context, width, height, strength) {
+  if (strength <= 0) {
+    return;
+  }
+
   context.save();
-  const radius = Math.max(width, height) * 0.72;
-  const gradient = context.createRadialGradient(
-    width / 2,
-    height / 2,
-    radius * 0.2,
-    width / 2,
-    height / 2,
-    radius
-  );
-  gradient.addColorStop(0, "rgba(255,255,255,0)");
-  gradient.addColorStop(1, `rgba(0,0,0,${strength / 140})`);
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
+  const alpha = strength / 220;
+  const topGradient = context.createLinearGradient(0, 0, 0, height * 0.18);
+  topGradient.addColorStop(0, `rgba(0,0,0,${alpha})`);
+  topGradient.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = topGradient;
+  context.fillRect(0, 0, width, height * 0.18);
+
+  const bottomGradient = context.createLinearGradient(0, height, 0, height * 0.82);
+  bottomGradient.addColorStop(0, `rgba(0,0,0,${alpha})`);
+  bottomGradient.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = bottomGradient;
+  context.fillRect(0, height * 0.82, width, height * 0.18);
+
+  const leftGradient = context.createLinearGradient(0, 0, width * 0.12, 0);
+  leftGradient.addColorStop(0, `rgba(0,0,0,${alpha * 0.9})`);
+  leftGradient.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = leftGradient;
+  context.fillRect(0, 0, width * 0.12, height);
+
+  const rightGradient = context.createLinearGradient(width, 0, width * 0.88, 0);
+  rightGradient.addColorStop(0, `rgba(0,0,0,${alpha * 0.9})`);
+  rightGradient.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = rightGradient;
+  context.fillRect(width * 0.88, 0, width * 0.12, height);
   context.restore();
 }
 
