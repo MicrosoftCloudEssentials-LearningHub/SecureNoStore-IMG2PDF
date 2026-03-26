@@ -57,7 +57,7 @@ Format support still depends on the browser runtime for some edge cases. The app
 
 1. Push this repository to GitHub.
 2. In the repository settings, open Pages.
-3. Set the source to deploy from the main branch root.
+3. Set the source to GitHub Actions.
 4. Save, then wait for Pages to publish the site.
 
 <!-- START BADGE -->

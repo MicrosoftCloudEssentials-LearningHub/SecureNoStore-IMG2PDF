@@ -1,0 +1,46 @@
+name: Update Last Modified Date
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-date:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Update last modified date in Markdown files
+        run: python .github/workflows/update_date.py
+
+      - name: Pull, commit, and push if needed
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          git pull origin "$BRANCH" --no-rebase || echo "No merge needed"
+          git add -A
+          git diff --staged --quiet || git commit -m "Update last modified date in Markdown files"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}"
+          git push origin HEAD:"$BRANCH"
