@@ -254,15 +254,21 @@
 
           <div class="actions-row">
             <button id="download-btn" class="primary-button" disabled>Download PDF</button>
-            <button id="ocr-btn" class="secondary-button" disabled>Extract Text</button>
-            <button id="ocr-visible-btn" class="secondary-button" disabled>Extract Visible Text</button>
-            <button id="ocr-selected-btn" class="secondary-button" disabled>Extract Selected Text</button>
-            <button id="apply-scan-selected-btn" class="secondary-button" disabled>Apply Scan to Selected</button>
-            <button id="clear-scan-selected-btn" class="secondary-button" disabled>Clear Selected Scan Override</button>
-            <button id="keep-selected-btn" class="secondary-button" disabled>Keep Selected Only</button>
-            <button id="remove-blank-btn" class="secondary-button" disabled>Select Blank Pages</button>
-            <button id="remove-selected-btn" class="secondary-button" disabled>Remove Selected Pages</button>
-            <button id="clear-btn" class="secondary-button" disabled>Clear</button>
+            <select id="page-actions-select" class="action-select" disabled>
+              <option value="" selected disabled>Page actions…</option>
+              <option value="apply-scan-selected">Apply scan to selected</option>
+              <option value="clear-scan-selected">Clear selected scan override</option>
+              <option value="keep-selected">Keep selected only</option>
+              <option value="remove-blank">Select blank pages</option>
+              <option value="remove-selected">Remove selected pages</option>
+              <option value="clear">Clear all pages</option>
+            </select>
+            <select id="ocr-actions-select" class="action-select" disabled>
+              <option value="" selected disabled>Extract text…</option>
+              <option value="ocr-all">Extract all text</option>
+              <option value="ocr-visible">Extract visible text</option>
+              <option value="ocr-selected">Extract selected text</option>
+            </select>
           </div>
 
           <p id="status" class="status" aria-live="polite">

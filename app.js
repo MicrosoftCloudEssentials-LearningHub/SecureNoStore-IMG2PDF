@@ -82,15 +82,8 @@ const elements = {
   previewTemplate: document.querySelector("#preview-template"),
   status: document.querySelector("#status"),
   downloadBtn: document.querySelector("#download-btn"),
-  ocrBtn: document.querySelector("#ocr-btn"),
-  ocrVisibleBtn: document.querySelector("#ocr-visible-btn"),
-  ocrSelectedBtn: document.querySelector("#ocr-selected-btn"),
-  applyScanSelectedBtn: document.querySelector("#apply-scan-selected-btn"),
-  clearScanSelectedBtn: document.querySelector("#clear-scan-selected-btn"),
-  keepSelectedBtn: document.querySelector("#keep-selected-btn"),
-  removeBlankBtn: document.querySelector("#remove-blank-btn"),
-  removeSelectedBtn: document.querySelector("#remove-selected-btn"),
-  clearBtn: document.querySelector("#clear-btn"),
+  pageActionsSelect: document.querySelector("#page-actions-select"),
+  ocrActionsSelect: document.querySelector("#ocr-actions-select"),
   pageSelectionAction: document.querySelector("#page-selection-action"),
   pageFilterSelect: document.querySelector("#page-filter-select"),
   exportPresetButtons: Array.from(document.querySelectorAll(".export-preset-button")),
@@ -335,8 +328,10 @@ function updateDownloadButtonLabel() {
 }
 
 function updateVisibleActionLabels() {
-  elements.ocrBtn.textContent = elements.exportVisibleOnly.checked ? "Extract All Text" : "Extract Text";
-  elements.ocrVisibleBtn.textContent = elements.exportVisibleOnly.checked ? "OCR Visible Pages Only" : "Extract Visible Text";
+  // OCR option text updated inside the dropdown options
+  const allLabel = elements.exportVisibleOnly.checked ? "Extract all text" : "Extract all text";
+  const opt = elements.ocrActionsSelect.querySelector('[value="ocr-all"]');
+  if (opt) opt.textContent = allLabel;
 }
 
 function updateAutomationPreferenceState() {
@@ -347,7 +342,8 @@ function updateAutomationPreferenceState() {
 }
 
 function updateBlankActionLabel() {
-  elements.removeBlankBtn.textContent = elements.selectDetectedBlanks.checked ? "Select Blank Pages" : "Remove Blank Pages";
+  const opt = elements.pageActionsSelect.querySelector('[value="remove-blank"]');
+  if (opt) opt.textContent = elements.selectDetectedBlanks.checked ? "Select blank pages" : "Remove blank pages";
 }
 
 function saveReviewSettings() {
@@ -1422,15 +1418,9 @@ function renderPreviews() {
   });
 
   elements.downloadBtn.disabled = state.files.length === 0;
-  elements.ocrBtn.disabled = state.files.length === 0;
-  elements.ocrVisibleBtn.disabled = visibleEntries.length === 0;
-  elements.ocrSelectedBtn.disabled = selectedCount === 0;
-  elements.applyScanSelectedBtn.disabled = selectedCount === 0;
-  elements.clearScanSelectedBtn.disabled = selectedCount === 0;
-  elements.keepSelectedBtn.disabled = selectedCount === 0;
-  elements.removeBlankBtn.disabled = state.files.length === 0;
-  elements.removeSelectedBtn.disabled = selectedCount === 0;
-  elements.clearBtn.disabled = state.files.length === 0;
+  elements.pageActionsSelect.disabled = state.files.length === 0;
+  elements.ocrActionsSelect.disabled = state.files.length === 0;
+  elements.pageActionsSelect.value = "";
   elements.pageSelectionAction.value = "";
   elements.adjustApplySelected.disabled = selectedCount === 0 || !state.activeAdjustId;
   updateFilterChipState();
@@ -1667,8 +1657,7 @@ async function extractTextFromEntries(entries, scopeLabel) {
     return;
   }
 
-  elements.ocrBtn.disabled = true;
-  elements.ocrSelectedBtn.disabled = true;
+  elements.ocrActionsSelect.disabled = true;
   const pageTexts = [];
   const language = getOcrLanguageCode();
 
@@ -1687,8 +1676,7 @@ async function extractTextFromEntries(entries, scopeLabel) {
   } catch (error) {
     setStatus("OCR could not finish for one or more pages.");
   } finally {
-    elements.ocrBtn.disabled = state.files.length === 0;
-    elements.ocrSelectedBtn.disabled = getSelectedEntries().length === 0;
+    elements.ocrActionsSelect.disabled = state.files.length === 0;
   }
 }
 
@@ -1763,7 +1751,7 @@ async function removeBlankPages() {
     return;
   }
 
-  elements.removeBlankBtn.disabled = true;
+  elements.pageActionsSelect.disabled = true;
   const controls = getControls();
   const blankIds = [];
 
@@ -1802,7 +1790,7 @@ async function removeBlankPages() {
     renderPreviews();
     setStatus(`Removed ${blankIds.length} blank page${blankIds.length === 1 ? "" : "s"}.`);
   } finally {
-    elements.removeBlankBtn.disabled = state.files.length === 0;
+    elements.pageActionsSelect.disabled = state.files.length === 0;
   }
 }
 
@@ -2569,15 +2557,23 @@ window.addEventListener("resize", () => {
 });
 
 elements.downloadBtn.addEventListener("click", exportOutput);
-elements.ocrBtn.addEventListener("click", extractTextFromPages);
-elements.ocrVisibleBtn.addEventListener("click", extractTextFromVisiblePages);
-elements.ocrSelectedBtn.addEventListener("click", extractTextFromSelectedPages);
-elements.applyScanSelectedBtn.addEventListener("click", applyScanSettingsToSelectedPages);
-elements.clearScanSelectedBtn.addEventListener("click", clearScanSettingsFromSelectedPages);
-elements.keepSelectedBtn.addEventListener("click", keepSelectedPagesOnly);
-elements.removeBlankBtn.addEventListener("click", removeBlankPages);
-elements.removeSelectedBtn.addEventListener("click", removeSelectedPages);
-elements.clearBtn.addEventListener("click", clearAll);
+elements.pageActionsSelect.addEventListener("change", () => {
+  const action = elements.pageActionsSelect.value;
+  if (action === "apply-scan-selected") applyScanSettingsToSelectedPages();
+  else if (action === "clear-scan-selected") clearScanSettingsFromSelectedPages();
+  else if (action === "keep-selected") keepSelectedPagesOnly();
+  else if (action === "remove-blank") removeBlankPages();
+  else if (action === "remove-selected") removeSelectedPages();
+  else if (action === "clear") clearAll();
+  elements.pageActionsSelect.value = "";
+});
+elements.ocrActionsSelect.addEventListener("change", () => {
+  const action = elements.ocrActionsSelect.value;
+  if (action === "ocr-all") extractTextFromPages();
+  else if (action === "ocr-visible") extractTextFromVisiblePages();
+  else if (action === "ocr-selected") extractTextFromSelectedPages();
+  elements.ocrActionsSelect.value = "";
+});
 elements.pageSelectionAction.addEventListener("change", () => {
   const action = elements.pageSelectionAction.value;
   if (action === "select-all") setAllSelections(true);
