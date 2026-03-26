@@ -6,9 +6,9 @@ const pageFormats = {
 };
 
 const presetSettings = {
-  clean: { brightness: 12, contrast: 112, grain: 2, vignette: 4, grayscale: 0.15 },
-  classic: { brightness: 8, contrast: 124, grain: 7, vignette: 14, grayscale: 0.82 },
-  "high-contrast": { brightness: 4, contrast: 152, grain: 4, vignette: 9, grayscale: 1 },
+  clean: { brightness: 12, contrast: 112, grain: 2, vignette: 4, threshold: 172 },
+  classic: { brightness: 8, contrast: 124, grain: 7, vignette: 14, threshold: 156 },
+  "high-contrast": { brightness: 4, contrast: 152, grain: 4, vignette: 9, threshold: 142 },
 };
 
 const broadlySupportedExtensions = new Set([
@@ -202,24 +202,23 @@ function applyScanEffect(sourceImage, controls) {
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
   const preset = presetSettings[controls.preset];
-  const grayscaleMix = preset.grayscale;
   const contrastFactor = controls.contrast / 100;
   const brightnessOffset = controls.brightness * 1.8;
   const grainAmount = controls.grain;
+  const threshold = preset.threshold;
 
   for (let index = 0; index < data.length; index += 4) {
     const red = data[index];
     const green = data[index + 1];
     const blue = data[index + 2];
     const baseGray = red * 0.299 + green * 0.587 + blue * 0.114;
-    const mixedRed = red * (1 - grayscaleMix) + baseGray * grayscaleMix;
-    const mixedGreen = green * (1 - grayscaleMix) + baseGray * grayscaleMix;
-    const mixedBlue = blue * (1 - grayscaleMix) + baseGray * grayscaleMix;
     const noise = (Math.random() - 0.5) * grainAmount * 2;
+    const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise);
+    const binaryValue = adjustedGray >= threshold ? 255 : 0;
 
-    data[index] = clamp(((mixedRed - 128) * contrastFactor) + 128 + brightnessOffset + noise + 6);
-    data[index + 1] = clamp(((mixedGreen - 128) * contrastFactor) + 128 + brightnessOffset + noise + 4);
-    data[index + 2] = clamp(((mixedBlue - 128) * contrastFactor) + 128 + brightnessOffset + noise);
+    data[index] = binaryValue;
+    data[index + 1] = binaryValue;
+    data[index + 2] = binaryValue;
   }
 
   context.putImageData(imageData, 0, 0);
@@ -232,9 +231,9 @@ function applyScanEffect(sourceImage, controls) {
 function applyPaperWash(context, width, height) {
   context.save();
   const gradient = context.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "rgba(255, 248, 236, 0.08)");
-  gradient.addColorStop(0.5, "rgba(242, 235, 224, 0.14)");
-  gradient.addColorStop(1, "rgba(222, 212, 197, 0.18)");
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.02)");
+  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.06)");
+  gradient.addColorStop(1, "rgba(232, 232, 232, 0.08)");
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
   context.restore();
@@ -252,7 +251,7 @@ function applyVignette(context, width, height, strength) {
     radius
   );
   gradient.addColorStop(0, "rgba(255,255,255,0)");
-  gradient.addColorStop(1, `rgba(70,55,38,${strength / 100})`);
+  gradient.addColorStop(1, `rgba(0,0,0,${strength / 140})`);
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
   context.restore();
@@ -260,7 +259,7 @@ function applyVignette(context, width, height, strength) {
 
 function applyShadowEdge(context, width, height) {
   context.save();
-  context.fillStyle = "rgba(40, 28, 18, 0.06)";
+  context.fillStyle = "rgba(0, 0, 0, 0.05)";
   context.fillRect(0, height - Math.max(8, height * 0.015), width, Math.max(8, height * 0.015));
   context.restore();
 }

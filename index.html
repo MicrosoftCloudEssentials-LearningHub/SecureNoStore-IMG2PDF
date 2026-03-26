@@ -6,7 +6,7 @@
     <title>SafeScan IMG2PDF</title>
     <meta
       name="description"
-      content="Convert photos into realistic scanned PDFs entirely in your browser. No login, no upload, no storage."
+      content="Convert photos into black-and-white scan PDFs entirely in your browser. No login, no upload, no storage."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -45,7 +45,7 @@
           <p class="card-label">Local processing</p>
           <ol>
             <li>Choose one or more images.</li>
-            <li>Tune the scan look.</li>
+            <li>Tune the black-and-white scan look.</li>
             <li>Download a multi-page PDF.</li>
           </ol>
           <p class="card-note">All processing happens on-device using canvas and client-side PDF generation.</p>
@@ -74,10 +74,10 @@
           <div class="mode-switch" role="group" aria-label="PDF appearance">
             <p class="mode-switch-label">PDF appearance</p>
             <label class="toggle-row" for="scan-look-toggle">
-              <span>Use scanned look</span>
+              <span>Use black-and-white scan</span>
               <input id="scan-look-toggle" type="checkbox" checked />
             </label>
-            <p class="mode-switch-note">Turn this off to export the original images without scan styling.</p>
+            <p class="mode-switch-note">Turn this off to export the original images without black-and-white scan styling.</p>
           </div>
 
           <div class="controls-grid">
@@ -93,8 +93,8 @@
               <span>Mode</span>
               <select id="scan-preset">
                 <option value="clean">Clean document</option>
-                <option value="classic" selected>Classic scan</option>
-                <option value="high-contrast">High contrast</option>
+                <option value="classic" selected>Classic black-and-white scan</option>
+                <option value="high-contrast">High-contrast black-and-white</option>
               </select>
             </label>
 
@@ -125,7 +125,7 @@
           </div>
 
           <p id="status" class="status" aria-live="polite">
-            Add images to start building a local scanned PDF.
+            Add images to start building a local black-and-white scan PDF.
           </p>
         </section>
 

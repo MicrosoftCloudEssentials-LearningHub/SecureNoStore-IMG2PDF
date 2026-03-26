@@ -9,7 +9,7 @@ Last updated: 2026-03-25
 
 ----------
 
-> Static demo app for GitHub Pages that lets users upload photos and convert them into realistic scanned-style PDF documents entirely in the browser.
+> Static demo app for GitHub Pages that lets users upload photos and convert them into black-and-white scan PDF documents entirely in the browser.
 
 > [!NOTE]
 > This demo is designed so image processing and PDF creation happen in the browser runtime. GitHub Pages only serves the static assets; it does not receive uploaded image data from the app.
@@ -17,8 +17,8 @@ Last updated: 2026-03-25
 ## What it does
 
 - Accepts one or more local image files.
-- Lets users switch between original images and a scanned-document look.
-- Applies a scanned-document look with brightness, contrast, grain, and vignette controls when enabled.
+- Lets users switch between original images and a black-and-white scan look.
+- Applies a black-and-white scan look with brightness, contrast, grain, and vignette controls when enabled.
 - Exports a multi-page PDF in the browser.
 - Keeps images on-device with no login and no server-side upload flow.
 
