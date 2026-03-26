@@ -961,53 +961,60 @@ function applyPerspectiveCorrection(canvas, adjustments, cropRect = null, source
     return canvas;
   }
 
-  const sourcePoints = orderCorners(getPerspectivePoints(canvas, adjustments, cropRect, sourceCanvas));
-  const destinationWidth = Math.max(
-    1,
-    Math.round(Math.max(distanceBetween(sourcePoints[0], sourcePoints[1]), distanceBetween(sourcePoints[3], sourcePoints[2])))
-  );
-  const destinationHeight = Math.max(
-    1,
-    Math.round(Math.max(distanceBetween(sourcePoints[0], sourcePoints[3]), distanceBetween(sourcePoints[1], sourcePoints[2])))
-  );
+  const toDelete = [];
+  try {
+    const sourcePoints = orderCorners(getPerspectivePoints(canvas, adjustments, cropRect, sourceCanvas));
+    const destinationWidth = Math.max(
+      1,
+      Math.round(Math.max(distanceBetween(sourcePoints[0], sourcePoints[1]), distanceBetween(sourcePoints[3], sourcePoints[2])))
+    );
+    const destinationHeight = Math.max(
+      1,
+      Math.round(Math.max(distanceBetween(sourcePoints[0], sourcePoints[3]), distanceBetween(sourcePoints[1], sourcePoints[2])))
+    );
 
-  const src = window.cv.imread(canvas);
-  const dst = new window.cv.Mat();
-  const srcTri = window.cv.matFromArray(4, 1, window.cv.CV_32FC2, [
-    sourcePoints[0].x, sourcePoints[0].y,
-    sourcePoints[1].x, sourcePoints[1].y,
-    sourcePoints[2].x, sourcePoints[2].y,
-    sourcePoints[3].x, sourcePoints[3].y,
-  ]);
-  const dstTri = window.cv.matFromArray(4, 1, window.cv.CV_32FC2, [
-    0, 0,
-    destinationWidth - 1, 0,
-    destinationWidth - 1, destinationHeight - 1,
-    0, destinationHeight - 1,
-  ]);
-  const matrix = window.cv.getPerspectiveTransform(srcTri, dstTri);
+    const src = window.cv.imread(canvas);
+    toDelete.push(src);
+    const dst = new window.cv.Mat();
+    toDelete.push(dst);
+    const srcTri = window.cv.matFromArray(4, 1, window.cv.CV_32FC2, [
+      sourcePoints[0].x, sourcePoints[0].y,
+      sourcePoints[1].x, sourcePoints[1].y,
+      sourcePoints[2].x, sourcePoints[2].y,
+      sourcePoints[3].x, sourcePoints[3].y,
+    ]);
+    toDelete.push(srcTri);
+    const dstTri = window.cv.matFromArray(4, 1, window.cv.CV_32FC2, [
+      0, 0,
+      destinationWidth - 1, 0,
+      destinationWidth - 1, destinationHeight - 1,
+      0, destinationHeight - 1,
+    ]);
+    toDelete.push(dstTri);
+    const matrix = window.cv.getPerspectiveTransform(srcTri, dstTri);
+    toDelete.push(matrix);
 
-  window.cv.warpPerspective(
-    src,
-    dst,
-    matrix,
-    new window.cv.Size(destinationWidth, destinationHeight),
-    window.cv.INTER_LINEAR,
-    window.cv.BORDER_CONSTANT,
-    new window.cv.Scalar(255, 255, 255, 255)
-  );
+    window.cv.warpPerspective(
+      src,
+      dst,
+      matrix,
+      new window.cv.Size(destinationWidth, destinationHeight),
+      window.cv.INTER_LINEAR,
+      window.cv.BORDER_CONSTANT,
+      new window.cv.Scalar(255, 255, 255, 255)
+    );
 
-  const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = destinationWidth;
-  outputCanvas.height = destinationHeight;
-  window.cv.imshow(outputCanvas, dst);
-
-  src.delete();
-  dst.delete();
-  srcTri.delete();
-  dstTri.delete();
-  matrix.delete();
-  return outputCanvas;
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = destinationWidth;
+    outputCanvas.height = destinationHeight;
+    window.cv.imshow(outputCanvas, dst);
+    return outputCanvas;
+  } catch {
+    // Any OpenCV failure (degenerate corners, zero-size, etc.) — return the canvas unchanged
+    return canvas;
+  } finally {
+    toDelete.forEach((mat) => { try { mat.delete(); } catch {} });
+  }
 }
 
 function detectDocumentShape(canvas) {
@@ -1388,7 +1395,12 @@ function renderPreviews() {
     const duplicateButton = fragment.querySelector(".duplicate-button");
     const removeButton = fragment.querySelector(".remove-button");
     const effectiveControls = getEffectiveControls(entry, controls);
-    const rendered = buildRenderCanvas(entry.sourceImage, effectiveControls, { maxDimension: previewMaxDimension }, getEntryAdjustments(entry));
+    let rendered;
+    try {
+      rendered = buildRenderCanvas(entry.sourceImage, effectiveControls, { maxDimension: previewMaxDimension }, getEntryAdjustments(entry));
+    } catch {
+      rendered = renderOriginalImageAtSize(entry.sourceImage, Math.min(entry.width, previewMaxDimension), Math.min(entry.height, previewMaxDimension));
+    }
 
     card.dataset.id = entry.id;
     card.classList.toggle("is-selected", Boolean(entry.selected));
