@@ -493,6 +493,8 @@ function createDefaultAdjustments() {
     cropBottom: 0,
     cropLeft: 0,
     perspectiveEnabled: false,
+    autoDetected: false,
+    autoDetectionTried: false,
     corners: createDefaultCorners(),
   };
 }
@@ -509,7 +511,78 @@ function createDefaultCorners() {
 function getEntryAdjustments(entry) {
   entry.adjustments ||= createDefaultAdjustments();
   entry.adjustments.corners ||= createDefaultCorners();
+  entry.adjustments.autoDetected ||= false;
+  entry.adjustments.autoDetectionTried ||= false;
   return entry.adjustments;
+}
+
+function cornersMatchDefault(corners) {
+  const defaults = createDefaultCorners();
+  return (corners || []).every((point, index) => {
+    const fallback = defaults[index];
+    return fallback && Math.abs(point.x - fallback.x) < 0.0001 && Math.abs(point.y - fallback.y) < 0.0001;
+  });
+}
+
+function hasMeaningfulAdjustments(adjustments) {
+  return Boolean(
+    adjustments.rotate
+    || adjustments.cropTop
+    || adjustments.cropRight
+    || adjustments.cropBottom
+    || adjustments.cropLeft
+    || adjustments.perspectiveEnabled
+    || !cornersMatchDefault(adjustments.corners || createDefaultCorners())
+  );
+}
+
+function applyDetectedDocumentAdjustments(adjustments, detectedDocument) {
+  adjustments.corners = detectedDocument.corners;
+  adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
+  adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
+  adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.bottom) * 100));
+  adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.left * 100));
+  adjustments.perspectiveEnabled = true;
+  adjustments.autoDetected = true;
+  adjustments.autoDetectionTried = true;
+}
+
+function maybeAutoDetectEntryDocument(entry, maxDimension = adjustPreviewMaxDimension) {
+  const adjustments = getEntryAdjustments(entry);
+  if (!opencvReady() || adjustments.autoDetectionTried || hasMeaningfulAdjustments(adjustments)) {
+    return false;
+  }
+
+  const baseCanvas = getBaseAdjustedCanvas(entry.sourceImage, adjustments, maxDimension);
+  const detectedDocument = detectDocumentShape(baseCanvas);
+  adjustments.autoDetectionTried = true;
+  if (!detectedDocument) {
+    return false;
+  }
+
+  applyDetectedDocumentAdjustments(adjustments, detectedDocument);
+  return true;
+}
+
+function autoDetectPendingEntries(entries = state.files, maxDimension = adjustPreviewMaxDimension) {
+  if (!opencvReady()) {
+    return 0;
+  }
+
+  let detectedCount = 0;
+  entries.forEach((entry) => {
+    if (maybeAutoDetectEntryDocument(entry, maxDimension)) {
+      detectedCount += 1;
+    }
+  });
+  return detectedCount;
+}
+
+function countPendingAutoDetectEntries(entries = state.files) {
+  return entries.filter((entry) => {
+    const adjustments = getEntryAdjustments(entry);
+    return !adjustments.autoDetectionTried && !hasMeaningfulAdjustments(adjustments);
+  }).length;
 }
 
 function getBaseAdjustedCanvas(sourceImage, adjustments, maxDimension) {
@@ -1190,6 +1263,7 @@ async function addFiles(fileList) {
 }
 
 function renderPreviews() {
+  autoDetectPendingEntries(state.files, previewMaxDimension);
   elements.previewList.innerHTML = "";
   const controls = getControls();
   const selectedCount = getSelectedEntries().length;
@@ -1505,6 +1579,8 @@ async function extractTextFromEntries(entries, scopeLabel) {
     return;
   }
 
+  autoDetectPendingEntries(entries, 2200);
+
   if (!window.Tesseract) {
     setStatus("OCR engine is still loading. Try again in a moment.");
     return;
@@ -1655,6 +1731,14 @@ async function exportImageSet(format) {
     setStatus("There are no pages available to export with the current filter settings.");
     return;
   }
+
+  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries);
+  if (pendingAutoDetectCount && !opencvReady()) {
+    setStatus(`Document cleanup is still loading. Wait a moment and export again so ${pendingAutoDetectCount === 1 ? "this page is" : "these pages are"} flattened like scanned documents.`);
+    return;
+  }
+
+  autoDetectPendingEntries(entries);
 
   if (!window.JSZip) {
     setStatus("ZIP export is still loading. Try again in a moment.");
@@ -2170,12 +2254,7 @@ function autoDetectActiveDocument() {
   }
 
   const adjustments = getEntryAdjustments(entry);
-  adjustments.corners = detectedDocument.corners;
-  adjustments.cropTop = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.top * 100));
-  adjustments.cropRight = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.right) * 100));
-  adjustments.cropBottom = Math.max(0, Math.min(maxCropPercent, (1 - detectedDocument.bounds.bottom) * 100));
-  adjustments.cropLeft = Math.max(0, Math.min(maxCropPercent, detectedDocument.bounds.left * 100));
-  adjustments.perspectiveEnabled = true;
+  applyDetectedDocumentAdjustments(adjustments, detectedDocument);
   syncAdjustInputs(entry);
   elements.adjustPerspective.checked = true;
   renderAdjustPreview();
@@ -2223,6 +2302,14 @@ async function exportPdf() {
     setStatus("There are no pages available to export with the current filter settings.");
     return;
   }
+
+  const pendingAutoDetectCount = countPendingAutoDetectEntries(entries);
+  if (pendingAutoDetectCount && !opencvReady()) {
+    setStatus(`Document cleanup is still loading. Wait a moment and export again so ${pendingAutoDetectCount === 1 ? "this page is" : "these pages are"} flattened like scanned documents.`);
+    return;
+  }
+
+  autoDetectPendingEntries(entries);
 
   const pageSize = pageFormats[elements.pageSize.value];
   const doc = new jsPDF({
