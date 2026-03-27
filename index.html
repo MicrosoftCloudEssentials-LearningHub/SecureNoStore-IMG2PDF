@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260326-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260326-6" />
   </head>
   <body>
     <div class="page-shell">
@@ -93,6 +93,8 @@
               <span>Mode</span>
               <select id="scan-preset">
                 <option value="clean" selected>Office scanner</option>
+                <option value="clean-text">Clean text only</option>
+                <option value="clean-handwriting">Clean handwriting</option>
                 <option value="classic">Photocopier</option>
                 <option value="high-contrast">Receipts and forms</option>
                 <option value="thermal">Dot matrix / thermal receipt</option>
@@ -457,6 +459,6 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.min.js"></script>
     <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-    <script src="./app.js?v=20260326-4" defer></script>
+    <script src="./app.js?v=20260326-6" defer></script>
   </body>
 </html>

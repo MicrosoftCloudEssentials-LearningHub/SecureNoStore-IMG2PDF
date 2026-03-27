@@ -27,6 +27,8 @@ const autoDetectCropPadding = 0.012;
 
 const presetSettings = {
   clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006, scannerAge: 8, thermalFade: 0, ocrFirstRecommended: false },
+  "clean-text": { brightness: 12, contrast: 182, grain: 0, vignette: 0, threshold: 172, shadowBoost: 0.54, binaryMix: 1, lineNoise: 0, tonerNoise: 0, scannerAge: 0, thermalFade: 0, ocrFirstRecommended: true, pureMono: true, processingScale: 1, cleanIsolation: true, preserveLightInk: true },
+  "clean-handwriting": { brightness: 10, contrast: 158, grain: 0, vignette: 0, threshold: 176, shadowBoost: 0.44, binaryMix: 0.94, lineNoise: 0, tonerNoise: 0, scannerAge: 0, thermalFade: 0, ocrFirstRecommended: true, processingScale: 1, cleanIsolation: true, preserveLightInk: true, softerInk: true },
   classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012, scannerAge: 34, thermalFade: 0, ocrFirstRecommended: false },
   "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009, scannerAge: 18, thermalFade: 0, ocrFirstRecommended: true },
   thermal: { brightness: 6, contrast: 162, grain: 4, vignette: 0, threshold: 154, shadowBoost: 0.36, binaryMix: 0.92, lineNoise: 0.02, tonerNoise: 0.014, processingScale: 0.76, pureMono: true, streakStrength: 0.02, dropoutChance: 0.0011, scannerAge: 42, thermalFade: 28, dotMatrixColumns: true, ocrFirstRecommended: false },
@@ -35,6 +37,8 @@ const presetSettings = {
 
 const presetDescriptions = {
   clean: "Office scanner keeps pages bright and legible while flattening background paper tone.",
+  "clean-text": "Clean text mode forces a white background, keeps more faint gray ink, and snaps document content into hard black.",
+  "clean-handwriting": "Clean handwriting keeps the white paper look but softens thresholding so thin strokes survive more often.",
   classic: "Photocopier adds rougher toner texture and stronger black-and-white document separation.",
   "high-contrast": "Receipts and forms pushes darker text and harder edges for faded print and low-contrast paper.",
   thermal: "Dot matrix / thermal receipt mode keeps small print dark, narrow, and slightly banded like receipt stock.",
@@ -1193,6 +1197,7 @@ function syncPresetToControls() {
   elements.vignette.value = preset.vignette;
   elements.scannerAge.value = preset.scannerAge ?? 20;
   elements.thermalFade.value = preset.thermalFade ?? 0;
+  elements.ocrFirstMode.checked = Boolean(preset.ocrFirstRecommended);
   updatePresetDescription();
 }
 
@@ -1376,6 +1381,7 @@ function getPresetControlsForComparison(baseControls, presetKey) {
     vignette: preset.vignette,
     scannerAge: preset.scannerAge ?? 0,
     thermalFade: preset.thermalFade ?? 0,
+    ocrFirstMode: Boolean(preset.ocrFirstRecommended),
   };
 }
 
@@ -1451,6 +1457,7 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   const ageFactor = Math.max(0, Math.min(1, (controls.scannerAge ?? preset.scannerAge ?? 0) / 100));
   const thermalFade = preset.dotMatrixColumns ? Math.max(0, Math.min(1, (controls.thermalFade ?? preset.thermalFade ?? 0) / 100)) : 0;
   const ocrFirstMode = Boolean(controls.ocrFirstMode);
+  const cleanIsolation = Boolean(preset.cleanIsolation);
   const processingScale = Math.max(0.35, (preset.processingScale ?? 1) - ((preset.pureMono ? 0.12 : 0.04) * ageFactor));
   const processingWidth = Math.max(1, Math.round(dimensions.width * processingScale));
   const processingHeight = Math.max(1, Math.round(dimensions.height * processingScale));
@@ -1532,6 +1539,26 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
       }
     }
 
+    if (cleanIsolation) {
+      const inkThreshold = threshold + (preset.preserveLightInk ? 26 : 10);
+      const likelyInk = cleanedGray < inkThreshold || darkness > (preset.softerInk ? 0.022 : 0.04) || (colorSpread > 18 && cleanedGray < threshold + 42);
+
+      if (likelyInk) {
+        if (preset.softerInk) {
+          const softenedInk = cleanedGray < threshold - 16 ? 0 : clamp((cleanedGray - (threshold - 26)) * 3.8);
+          grayscaleValue = Math.min(grayscaleValue, softenedInk);
+        } else {
+          grayscaleValue = 0;
+        }
+      } else {
+        grayscaleValue = 255;
+      }
+
+      if (colorSpread < 18 && cleanedGray > threshold + 6) {
+        grayscaleValue = 255;
+      }
+    }
+
     if (backgroundCandidate || (controls.autoCleanup && grayscaleValue > threshold + 14)) {
       grayscaleValue = 255;
     }
@@ -1541,10 +1568,12 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     data[index + 2] = grayscaleValue;
   }
 
-  if (preset.pureMono) {
+  if (preset.pureMono && !cleanIsolation) {
     applyFaxArtifacts(data, processingCanvas.width, processingCanvas.height, preset);
   }
-  applyAgedScannerArtifacts(data, processingCanvas.width, processingCanvas.height, ageFactor, preset);
+  if (!cleanIsolation) {
+    applyAgedScannerArtifacts(data, processingCanvas.width, processingCanvas.height, ageFactor, preset);
+  }
   if (preset.dotMatrixColumns) {
     applyDotMatrixColumns(data, processingCanvas.width, processingCanvas.height, ageFactor);
   }
@@ -1565,7 +1594,7 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     applyPaperWash(outputContext, outputCanvas.width, outputCanvas.height);
     applyShadowEdge(outputContext, outputCanvas.width, outputCanvas.height);
   }
-  applyVignette(outputContext, outputCanvas.width, outputCanvas.height, ocrFirstMode ? Math.min(1, controls.vignette) : controls.vignette);
+  applyVignette(outputContext, outputCanvas.width, outputCanvas.height, cleanIsolation ? 0 : (ocrFirstMode ? Math.min(1, controls.vignette) : controls.vignette));
   return outputCanvas;
 }
 
