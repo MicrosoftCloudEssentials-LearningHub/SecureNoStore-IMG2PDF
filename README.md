@@ -14,6 +14,15 @@ Last updated: 2026-03-25
 > [!NOTE]
 > This demo is designed so image processing and PDF creation happen in the browser runtime. GitHub Pages only serves the static assets; it does not receive uploaded image data from the app.
 
+<img width="2102" height="3088" alt="image" src="https://github.com/user-attachments/assets/2dcb56d7-6eb6-4556-886e-5699b288e0fa" />
+
+<details>
+<summary><b> Detailed example </b> (Click to expand)</summary>
+
+<img width="2896" height="4963" alt="image" src="https://github.com/user-attachments/assets/1f00ea36-188a-44b0-902f-32c96e58f85c" />
+
+</details>
+
 ## What it does
 
 - Accepts one or more local image files.
@@ -51,7 +60,7 @@ Format support still depends on the browser runtime for some edge cases. The app
 - Then open `http://localhost:8080`.
 
 > [!NOTE]
-> > The repository also includes synthetic fixtures in [test-fixtures/images](test-fixtures/images) covering PNG, JPG, JPEG, GIF, BMP, TIFF, TIF, AVIF, HEIC, HEIF, and SVG for local testing.
+> The repository also includes synthetic fixtures in [test-fixtures/images](test-fixtures/images) covering PNG, JPG, JPEG, GIF, BMP, TIFF, TIF, AVIF, HEIC, HEIF, and SVG for local testing.
 
 ## Publish to GitHub Pages
 
