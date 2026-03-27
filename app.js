@@ -29,7 +29,7 @@ const presetSettings = {
   clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006 },
   classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012 },
   "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009 },
-  fax: { brightness: 0, contrast: 168, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 0.96, lineNoise: 0.045, tonerNoise: 0.022 },
+  fax: { brightness: 0, contrast: 172, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 1, lineNoise: 0.045, tonerNoise: 0.022, processingScale: 0.42, pureMono: true, streakStrength: 0.055, dropoutChance: 0.0024 },
 };
 
 const presetDescriptions = {
@@ -1230,20 +1230,52 @@ function loadImage(file) {
   });
 }
 
-function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImage.width, height: sourceImage.height }) {
-  const canvas = document.createElement("canvas");
-  canvas.width = dimensions.width;
-  canvas.height = dimensions.height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = canvas.width < sourceImage.width ? "medium" : "high";
-  context.drawImage(sourceImage, 0, 0);
+function applyFaxArtifacts(data, width, height, preset) {
+  const streakStrength = preset.streakStrength ?? 0.04;
+  const dropoutChance = preset.dropoutChance ?? 0.002;
 
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
+  for (let y = 0; y < height; y += 1) {
+    if (Math.random() < streakStrength) {
+      const segmentLength = Math.max(10, Math.round(width * (0.05 + (Math.random() * 0.18))));
+      const startX = Math.max(0, Math.floor(Math.random() * Math.max(1, width - segmentLength)));
+      const streakValue = Math.random() < 0.82 ? 255 : 0;
+
+      for (let x = startX; x < startX + segmentLength; x += 1) {
+        const index = ((y * width) + x) * 4;
+        data[index] = streakValue;
+        data[index + 1] = streakValue;
+        data[index + 2] = streakValue;
+      }
+    }
+
+    for (let x = 0; x < width; x += 1) {
+      const index = ((y * width) + x) * 4;
+      if (data[index] === 0 && Math.random() < dropoutChance) {
+        data[index] = 255;
+        data[index + 1] = 255;
+        data[index + 2] = 255;
+      }
+    }
+  }
+}
+
+function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImage.width, height: sourceImage.height }) {
   const preset = presetSettings[controls.preset];
+  const processingScale = preset.processingScale ?? 1;
+  const processingWidth = Math.max(1, Math.round(dimensions.width * processingScale));
+  const processingHeight = Math.max(1, Math.round(dimensions.height * processingScale));
+  const processingCanvas = document.createElement("canvas");
+  processingCanvas.width = processingWidth;
+  processingCanvas.height = processingHeight;
+  const processingContext = processingCanvas.getContext("2d", { willReadFrequently: true });
+  processingContext.fillStyle = "#ffffff";
+  processingContext.fillRect(0, 0, processingCanvas.width, processingCanvas.height);
+  processingContext.imageSmoothingEnabled = true;
+  processingContext.imageSmoothingQuality = processingCanvas.width < sourceImage.width ? "medium" : "high";
+  processingContext.drawImage(sourceImage, 0, 0, processingCanvas.width, processingCanvas.height);
+
+  const imageData = processingContext.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+  const data = imageData.data;
   const contrastFactor = controls.contrast / 100;
   const brightnessOffset = controls.brightness * 1.8;
   const grainAmount = controls.grain;
@@ -1252,12 +1284,12 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   const binaryMix = preset.binaryMix ?? 0.72;
   const lineNoise = preset.lineNoise ?? 0.02;
   const tonerNoise = preset.tonerNoise ?? 0.01;
-  const rowJitterSeed = Math.max(1, Math.round(canvas.height / 140));
+  const rowJitterSeed = Math.max(1, Math.round(processingCanvas.height / 140));
 
   for (let index = 0; index < data.length; index += 4) {
     const pixelIndex = index / 4;
-    const x = pixelIndex % canvas.width;
-    const y = Math.floor(pixelIndex / canvas.width);
+    const x = pixelIndex % processingCanvas.width;
+    const y = Math.floor(pixelIndex / processingCanvas.width);
     const red = data[index];
     const green = data[index + 1];
     const blue = data[index + 2];
@@ -1266,7 +1298,7 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     const noise = (Math.random() - 0.5) * grainAmount * 2;
     const scanLineOffset = Math.sin((y / rowJitterSeed) * 0.9) * 255 * lineNoise;
     const feedOffset = ((y % 3) === 0 ? -1 : 1) * 255 * lineNoise * 0.18;
-    const edgeFalloff = ((x / Math.max(1, canvas.width)) - 0.5) * 255 * lineNoise * 0.08;
+    const edgeFalloff = ((x / Math.max(1, processingCanvas.width)) - 0.5) * 255 * lineNoise * 0.08;
     const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise + scanLineOffset + feedOffset + edgeFalloff);
     const cleanupLift = controls.autoCleanup ? Math.max(0, adjustedGray - 168) * 0.72 : 0;
     const cleanedGray = clamp(adjustedGray + cleanupLift);
@@ -1288,6 +1320,11 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
       grayscaleValue = 255;
     }
 
+    if (preset.pureMono) {
+      const rowThreshold = threshold + Math.sin(y / 5.5) * 8 + (((y % 4) - 1.5) * 1.5);
+      grayscaleValue = grayscaleValue < rowThreshold ? 0 : 255;
+    }
+
     if (backgroundCandidate || (controls.autoCleanup && grayscaleValue > threshold + 14)) {
       grayscaleValue = 255;
     }
@@ -1297,11 +1334,28 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     data[index + 2] = grayscaleValue;
   }
 
-  context.putImageData(imageData, 0, 0);
-  applyPaperWash(context, canvas.width, canvas.height);
-  applyVignette(context, canvas.width, canvas.height, controls.vignette);
-  applyShadowEdge(context, canvas.width, canvas.height);
-  return canvas;
+  if (preset.pureMono) {
+    applyFaxArtifacts(data, processingCanvas.width, processingCanvas.height, preset);
+  }
+
+  processingContext.putImageData(imageData, 0, 0);
+
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = dimensions.width;
+  outputCanvas.height = dimensions.height;
+  const outputContext = outputCanvas.getContext("2d", { willReadFrequently: true });
+  outputContext.fillStyle = "#ffffff";
+  outputContext.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+  outputContext.imageSmoothingEnabled = !preset.pureMono;
+  outputContext.imageSmoothingQuality = preset.pureMono ? "low" : "high";
+  outputContext.drawImage(processingCanvas, 0, 0, outputCanvas.width, outputCanvas.height);
+
+  if (!preset.pureMono) {
+    applyPaperWash(outputContext, outputCanvas.width, outputCanvas.height);
+    applyShadowEdge(outputContext, outputCanvas.width, outputCanvas.height);
+  }
+  applyVignette(outputContext, outputCanvas.width, outputCanvas.height, controls.vignette);
+  return outputCanvas;
 }
 
 function applyPaperWash(context, width, height) {
