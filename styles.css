@@ -537,10 +537,36 @@ h1 {
 
 .preset-comparison-panel {
   margin-top: 18px;
-  padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(74, 58, 39, 0.1);
   background: rgba(255, 255, 255, 0.56);
+  overflow: hidden;
+}
+
+.preset-comparison-panel summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 18px;
+}
+
+.preset-comparison-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.preset-comparison-panel summary::after {
+  content: "+";
+  float: right;
+  color: var(--accent-dark);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.preset-comparison-panel[open] summary::after {
+  content: "-";
+}
+
+.preset-comparison-body {
+  padding: 0 18px 18px;
 }
 
 .preset-comparison-header {

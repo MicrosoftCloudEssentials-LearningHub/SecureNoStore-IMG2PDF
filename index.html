@@ -170,16 +170,18 @@
             <p id="preset-recommendation" class="control-hint preset-recommendation" aria-live="polite"></p>
           </div>
 
-          <section class="preset-comparison-panel" aria-labelledby="preset-comparison-title">
-            <div class="preset-comparison-header">
+          <details class="preset-comparison-panel">
+            <summary aria-labelledby="preset-comparison-title">
               <div>
                 <p class="card-label">Live Compare</p>
                 <h3 id="preset-comparison-title">Preset comparison</h3>
               </div>
+            </summary>
+            <div class="preset-comparison-body">
               <p id="preset-comparison-note" class="section-note">Upload a page to compare presets side by side.</p>
+              <div id="preset-comparison-grid" class="preset-comparison-grid"></div>
             </div>
-            <div id="preset-comparison-grid" class="preset-comparison-grid"></div>
-          </section>
+          </details>
 
           <details class="control-disclosure" open>
             <summary>Scan tuning</summary>
