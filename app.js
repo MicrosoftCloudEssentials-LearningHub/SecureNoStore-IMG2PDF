@@ -26,16 +26,18 @@ const minRemainingCropPercent = 10;
 const autoDetectCropPadding = 0.012;
 
 const presetSettings = {
-  clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006 },
-  classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012 },
-  "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009 },
-  fax: { brightness: 0, contrast: 172, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 1, lineNoise: 0.045, tonerNoise: 0.022, processingScale: 0.42, pureMono: true, streakStrength: 0.055, dropoutChance: 0.0024 },
+  clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006, scannerAge: 8 },
+  classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012, scannerAge: 34 },
+  "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009, scannerAge: 18 },
+  thermal: { brightness: 6, contrast: 162, grain: 4, vignette: 0, threshold: 154, shadowBoost: 0.36, binaryMix: 0.92, lineNoise: 0.02, tonerNoise: 0.014, processingScale: 0.76, pureMono: true, streakStrength: 0.02, dropoutChance: 0.0011, scannerAge: 42, dotMatrixColumns: true },
+  fax: { brightness: 0, contrast: 172, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 1, lineNoise: 0.045, tonerNoise: 0.022, processingScale: 0.42, pureMono: true, streakStrength: 0.055, dropoutChance: 0.0024, scannerAge: 72 },
 };
 
 const presetDescriptions = {
   clean: "Office scanner keeps pages bright and legible while flattening background paper tone.",
   classic: "Photocopier adds rougher toner texture and stronger black-and-white document separation.",
   "high-contrast": "Receipts and forms pushes darker text and harder edges for faded print and low-contrast paper.",
+  thermal: "Dot matrix / thermal receipt mode keeps small print dark, narrow, and slightly banded like receipt stock.",
   fax: "Fax mode leans into hard thresholding, feed-line texture, and coarse monochrome contrast.",
 };
 
@@ -132,6 +134,8 @@ const elements = {
   contrast: document.querySelector("#contrast"),
   grain: document.querySelector("#grain"),
   vignette: document.querySelector("#vignette"),
+  scannerAge: document.querySelector("#scanner-age"),
+  ocrFirstMode: document.querySelector("#ocr-first-mode"),
   controlsGrid: document.querySelector(".controls-grid"),
 };
 
@@ -165,6 +169,8 @@ function getControls() {
     contrast: Number(elements.contrast.value),
     grain: Number(elements.grain.value),
     vignette: Number(elements.vignette.value),
+    scannerAge: Number(elements.scannerAge.value),
+    ocrFirstMode: elements.ocrFirstMode.checked,
     pageMargin: Number(elements.pageMargin.value),
     imageFit: elements.imageFit.value,
     pdfQuality: elements.pdfQuality.value,
@@ -192,6 +198,8 @@ function getScanControls(controls = getControls()) {
     contrast: controls.contrast,
     grain: controls.grain,
     vignette: controls.vignette,
+    scannerAge: controls.scannerAge,
+    ocrFirstMode: controls.ocrFirstMode,
     autoCleanup: controls.autoCleanup,
   };
 }
@@ -1133,7 +1141,7 @@ function buildRenderCanvas(sourceImage, controls, options = {}, adjustments = cr
 function updateScanControlState() {
   const useScanLook = elements.scanLookToggle.checked;
   elements.controlsGrid.classList.toggle("disabled", !useScanLook);
-  [elements.preset, elements.brightness, elements.contrast, elements.grain, elements.vignette].forEach((input) => {
+  [elements.preset, elements.brightness, elements.contrast, elements.grain, elements.vignette, elements.scannerAge, elements.ocrFirstMode].forEach((input) => {
     input.disabled = !useScanLook;
   });
 }
@@ -1144,6 +1152,7 @@ function syncPresetToControls() {
   elements.contrast.value = preset.contrast;
   elements.grain.value = preset.grain;
   elements.vignette.value = preset.vignette;
+  elements.scannerAge.value = preset.scannerAge ?? 20;
   updatePresetDescription();
 }
 
@@ -1259,9 +1268,57 @@ function applyFaxArtifacts(data, width, height, preset) {
   }
 }
 
+function applyAgedScannerArtifacts(data, width, height, ageFactor, preset) {
+  if (ageFactor <= 0) {
+    return;
+  }
+
+  const rowBandChance = 0.01 + (ageFactor * 0.055);
+  const dustChance = 0.00012 + (ageFactor * 0.0014);
+  const rowOffsetStrength = 10 + (ageFactor * 42);
+
+  for (let y = 0; y < height; y += 1) {
+    let rowShift = 0;
+    if (Math.random() < rowBandChance) {
+      rowShift = (Math.random() - 0.5) * rowOffsetStrength;
+    }
+
+    for (let x = 0; x < width; x += 1) {
+      const index = ((y * width) + x) * 4;
+      const aged = clamp(data[index] + rowShift);
+      data[index] = aged;
+      data[index + 1] = aged;
+      data[index + 2] = aged;
+
+      if (Math.random() < dustChance) {
+        const dustValue = preset.pureMono ? (Math.random() < 0.5 ? 0 : 255) : (Math.random() < 0.6 ? 24 : 242);
+        data[index] = dustValue;
+        data[index + 1] = dustValue;
+        data[index + 2] = dustValue;
+      }
+    }
+  }
+}
+
+function applyDotMatrixColumns(data, width, height, ageFactor) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if ((x % 3) === 1 && (y % 2) === 0) {
+        const index = ((y * width) + x) * 4;
+        const softened = data[index] === 0 ? 0 : clamp(data[index] - (18 + (ageFactor * 14)));
+        data[index] = softened;
+        data[index + 1] = softened;
+        data[index + 2] = softened;
+      }
+    }
+  }
+}
+
 function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImage.width, height: sourceImage.height }) {
   const preset = presetSettings[controls.preset];
-  const processingScale = preset.processingScale ?? 1;
+  const ageFactor = Math.max(0, Math.min(1, (controls.scannerAge ?? preset.scannerAge ?? 0) / 100));
+  const ocrFirstMode = Boolean(controls.ocrFirstMode);
+  const processingScale = Math.max(0.35, (preset.processingScale ?? 1) - ((preset.pureMono ? 0.12 : 0.04) * ageFactor));
   const processingWidth = Math.max(1, Math.round(dimensions.width * processingScale));
   const processingHeight = Math.max(1, Math.round(dimensions.height * processingScale));
   const processingCanvas = document.createElement("canvas");
@@ -1279,11 +1336,11 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   const contrastFactor = controls.contrast / 100;
   const brightnessOffset = controls.brightness * 1.8;
   const grainAmount = controls.grain;
-  const threshold = preset.threshold;
-  const shadowBoost = preset.shadowBoost;
-  const binaryMix = preset.binaryMix ?? 0.72;
-  const lineNoise = preset.lineNoise ?? 0.02;
-  const tonerNoise = preset.tonerNoise ?? 0.01;
+  const threshold = preset.threshold - (ocrFirstMode ? 8 : 0);
+  const shadowBoost = preset.shadowBoost + (ocrFirstMode ? 0.08 : 0) + (ageFactor * 0.05);
+  const binaryMix = Math.min(1, (preset.binaryMix ?? 0.72) + (ocrFirstMode ? 0.12 : 0) + (ageFactor * 0.08));
+  const lineNoise = Math.max(0, (preset.lineNoise ?? 0.02) + (ageFactor * 0.03) - (ocrFirstMode ? 0.012 : 0));
+  const tonerNoise = Math.max(0, (preset.tonerNoise ?? 0.01) + (ageFactor * 0.014) - (ocrFirstMode ? 0.008 : 0));
   const rowJitterSeed = Math.max(1, Math.round(processingCanvas.height / 140));
 
   for (let index = 0; index < data.length; index += 4) {
@@ -1300,10 +1357,10 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     const feedOffset = ((y % 3) === 0 ? -1 : 1) * 255 * lineNoise * 0.18;
     const edgeFalloff = ((x / Math.max(1, processingCanvas.width)) - 0.5) * 255 * lineNoise * 0.08;
     const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise + scanLineOffset + feedOffset + edgeFalloff);
-    const cleanupLift = controls.autoCleanup ? Math.max(0, adjustedGray - 168) * 0.72 : 0;
+    const cleanupLift = controls.autoCleanup ? Math.max(0, adjustedGray - (ocrFirstMode ? 150 : 168)) * (ocrFirstMode ? 0.92 : 0.72) : 0;
     const cleanedGray = clamp(adjustedGray + cleanupLift);
     const darkness = Math.max(0, threshold - cleanedGray) / threshold;
-    const backgroundCandidate = controls.autoCleanup && cleanedGray > threshold - 18 && colorSpread < 44;
+    const backgroundCandidate = controls.autoCleanup && cleanedGray > threshold - (ocrFirstMode ? 28 : 18) && colorSpread < (ocrFirstMode ? 52 : 44);
     const thresholdDelta = cleanedGray - threshold;
     const binaryTarget = thresholdDelta < -24
       ? 8
@@ -1321,8 +1378,16 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     }
 
     if (preset.pureMono) {
-      const rowThreshold = threshold + Math.sin(y / 5.5) * 8 + (((y % 4) - 1.5) * 1.5);
+      const rowThreshold = threshold + Math.sin(y / 5.5) * (ocrFirstMode ? 4 : 8) + (((y % 4) - 1.5) * (ocrFirstMode ? 0.8 : 1.5));
       grayscaleValue = grayscaleValue < rowThreshold ? 0 : 255;
+    }
+
+    if (ocrFirstMode) {
+      if (grayscaleValue < 150) {
+        grayscaleValue = Math.max(0, grayscaleValue * 0.42);
+      } else if (grayscaleValue > 172) {
+        grayscaleValue = 255;
+      }
     }
 
     if (backgroundCandidate || (controls.autoCleanup && grayscaleValue > threshold + 14)) {
@@ -1337,6 +1402,10 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   if (preset.pureMono) {
     applyFaxArtifacts(data, processingCanvas.width, processingCanvas.height, preset);
   }
+  applyAgedScannerArtifacts(data, processingCanvas.width, processingCanvas.height, ageFactor, preset);
+  if (preset.dotMatrixColumns) {
+    applyDotMatrixColumns(data, processingCanvas.width, processingCanvas.height, ageFactor);
+  }
 
   processingContext.putImageData(imageData, 0, 0);
 
@@ -1350,11 +1419,11 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   outputContext.imageSmoothingQuality = preset.pureMono ? "low" : "high";
   outputContext.drawImage(processingCanvas, 0, 0, outputCanvas.width, outputCanvas.height);
 
-  if (!preset.pureMono) {
+  if (!preset.pureMono && !ocrFirstMode) {
     applyPaperWash(outputContext, outputCanvas.width, outputCanvas.height);
     applyShadowEdge(outputContext, outputCanvas.width, outputCanvas.height);
   }
-  applyVignette(outputContext, outputCanvas.width, outputCanvas.height, controls.vignette);
+  applyVignette(outputContext, outputCanvas.width, outputCanvas.height, ocrFirstMode ? Math.min(1, controls.vignette) : controls.vignette);
   return outputCanvas;
 }
 
@@ -1748,22 +1817,21 @@ function getEntriesForExport() {
   return entries;
 }
 
-function createOcrCanvas(sourceImage, adjustments) {
-  const canvas = createAdjustedCanvas(sourceImage, adjustments, 2200, true);
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-
-  for (let index = 0; index < data.length; index += 4) {
-    const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
-    const boosted = gray > 175 ? 255 : Math.max(0, gray * 0.72);
-    data[index] = boosted;
-    data[index + 1] = boosted;
-    data[index + 2] = boosted;
-  }
-
-  context.putImageData(imageData, 0, 0);
-  return canvas;
+function createOcrCanvas(sourceImage, adjustments, controls = getControls()) {
+  const adjustedCanvas = createAdjustedCanvas(sourceImage, adjustments, 2200, true);
+  const ocrControls = {
+    ...controls,
+    useScanLook: true,
+    preset: controls.preset === "fax" ? "high-contrast" : controls.preset,
+    autoCleanup: true,
+    ocrFirstMode: true,
+    scannerAge: 0,
+    grain: Math.min(controls.grain, 2),
+    vignette: 0,
+    contrast: Math.max(controls.contrast, 150),
+    brightness: Math.max(controls.brightness, 6),
+  };
+  return applyScanEffect(adjustedCanvas, ocrControls, { width: adjustedCanvas.width, height: adjustedCanvas.height });
 }
 
 function downloadTextFile(fileName, text) {
@@ -1782,6 +1850,7 @@ async function extractTextFromEntries(entries, scopeLabel) {
   }
 
   autoDetectPendingEntries(entries, 2200);
+  const controls = getControls();
 
   if (!window.Tesseract) {
     setStatus("OCR engine is still loading. Try again in a moment.");
@@ -1795,7 +1864,7 @@ async function extractTextFromEntries(entries, scopeLabel) {
   try {
     for (const [index, entry] of entries.entries()) {
       setStatus(`Extracting text from ${scopeLabel} page ${index + 1} of ${entries.length}...`);
-      const ocrCanvas = createOcrCanvas(entry.sourceImage, getEntryAdjustments(entry));
+      const ocrCanvas = createOcrCanvas(entry.sourceImage, getEntryAdjustments(entry), controls);
       const result = await window.Tesseract.recognize(ocrCanvas, language, {
         logger: () => {},
       });
@@ -2637,11 +2706,16 @@ elements.autoCleanup.addEventListener("change", () => {
 
 elements.selectDetectedBlanks.addEventListener("change", updateBlankActionLabel);
 
-[elements.brightness, elements.contrast, elements.grain, elements.vignette].forEach((input) => {
+[elements.brightness, elements.contrast, elements.grain, elements.vignette, elements.scannerAge].forEach((input) => {
   input.addEventListener("input", () => {
     scheduleRenderPreviews();
     renderAdjustPreview();
   });
+});
+
+elements.ocrFirstMode.addEventListener("change", () => {
+  scheduleRenderPreviews();
+  renderAdjustPreview();
 });
 
 [elements.adjustRotate, elements.adjustCropTop, elements.adjustCropRight, elements.adjustCropBottom, elements.adjustCropLeft].forEach((input) => {
