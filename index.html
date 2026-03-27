@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260326-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260326-4" />
   </head>
   <body>
     <div class="page-shell">
@@ -130,7 +130,19 @@
             <p id="preset-description" class="control-hint" aria-live="polite">
               Office scanner keeps pages light and clean with the least texture.
             </p>
+            <p id="preset-recommendation" class="control-hint preset-recommendation" aria-live="polite"></p>
           </div>
+
+          <section class="preset-comparison-panel" aria-labelledby="preset-comparison-title">
+            <div class="preset-comparison-header">
+              <div>
+                <p class="card-label">Live Compare</p>
+                <h3 id="preset-comparison-title">Preset comparison</h3>
+              </div>
+              <p id="preset-comparison-note" class="section-note">Upload a page to compare presets side by side.</p>
+            </div>
+            <div id="preset-comparison-grid" class="preset-comparison-grid"></div>
+          </section>
 
           <details class="control-disclosure" open>
             <summary>Scan tuning</summary>
@@ -158,6 +170,11 @@
               <label>
                 <span>Scanner age</span>
                 <input id="scanner-age" type="range" min="0" max="100" value="8" />
+              </label>
+
+              <label>
+                <span>Thermal fade</span>
+                <input id="thermal-fade" type="range" min="0" max="100" value="0" />
               </label>
 
               <label class="checkbox-control">
@@ -440,6 +457,6 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.min.js"></script>
     <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-    <script src="./app.js?v=20260326-3" defer></script>
+    <script src="./app.js?v=20260326-4" defer></script>
   </body>
 </html>

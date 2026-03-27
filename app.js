@@ -26,11 +26,11 @@ const minRemainingCropPercent = 10;
 const autoDetectCropPadding = 0.012;
 
 const presetSettings = {
-  clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006, scannerAge: 8 },
-  classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012, scannerAge: 34 },
-  "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009, scannerAge: 18 },
-  thermal: { brightness: 6, contrast: 162, grain: 4, vignette: 0, threshold: 154, shadowBoost: 0.36, binaryMix: 0.92, lineNoise: 0.02, tonerNoise: 0.014, processingScale: 0.76, pureMono: true, streakStrength: 0.02, dropoutChance: 0.0011, scannerAge: 42, dotMatrixColumns: true },
-  fax: { brightness: 0, contrast: 172, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 1, lineNoise: 0.045, tonerNoise: 0.022, processingScale: 0.42, pureMono: true, streakStrength: 0.055, dropoutChance: 0.0024, scannerAge: 72 },
+  clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006, scannerAge: 8, thermalFade: 0, ocrFirstRecommended: false },
+  classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012, scannerAge: 34, thermalFade: 0, ocrFirstRecommended: false },
+  "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009, scannerAge: 18, thermalFade: 0, ocrFirstRecommended: true },
+  thermal: { brightness: 6, contrast: 162, grain: 4, vignette: 0, threshold: 154, shadowBoost: 0.36, binaryMix: 0.92, lineNoise: 0.02, tonerNoise: 0.014, processingScale: 0.76, pureMono: true, streakStrength: 0.02, dropoutChance: 0.0011, scannerAge: 42, thermalFade: 28, dotMatrixColumns: true, ocrFirstRecommended: false },
+  fax: { brightness: 0, contrast: 172, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 1, lineNoise: 0.045, tonerNoise: 0.022, processingScale: 0.42, pureMono: true, streakStrength: 0.055, dropoutChance: 0.0024, scannerAge: 72, thermalFade: 0, ocrFirstRecommended: false },
 };
 
 const presetDescriptions = {
@@ -130,11 +130,15 @@ const elements = {
   scanLookToggle: document.querySelector("#scan-look-toggle"),
   preset: document.querySelector("#scan-preset"),
   presetDescription: document.querySelector("#preset-description"),
+  presetRecommendation: document.querySelector("#preset-recommendation"),
+  presetComparisonNote: document.querySelector("#preset-comparison-note"),
+  presetComparisonGrid: document.querySelector("#preset-comparison-grid"),
   brightness: document.querySelector("#brightness"),
   contrast: document.querySelector("#contrast"),
   grain: document.querySelector("#grain"),
   vignette: document.querySelector("#vignette"),
   scannerAge: document.querySelector("#scanner-age"),
+  thermalFade: document.querySelector("#thermal-fade"),
   ocrFirstMode: document.querySelector("#ocr-first-mode"),
   controlsGrid: document.querySelector(".controls-grid"),
 };
@@ -170,6 +174,7 @@ function getControls() {
     grain: Number(elements.grain.value),
     vignette: Number(elements.vignette.value),
     scannerAge: Number(elements.scannerAge.value),
+    thermalFade: Number(elements.thermalFade.value),
     ocrFirstMode: elements.ocrFirstMode.checked,
     pageMargin: Number(elements.pageMargin.value),
     imageFit: elements.imageFit.value,
@@ -199,9 +204,42 @@ function getScanControls(controls = getControls()) {
     grain: controls.grain,
     vignette: controls.vignette,
     scannerAge: controls.scannerAge,
+    thermalFade: controls.thermalFade,
     ocrFirstMode: controls.ocrFirstMode,
     autoCleanup: controls.autoCleanup,
   };
+}
+
+function getPresetLabel(presetKey) {
+  const option = elements.preset.querySelector(`[value="${presetKey}"]`);
+  return option ? option.textContent : presetKey;
+}
+
+function getPresetRecommendationText(presetKey) {
+  const preset = presetSettings[presetKey];
+  if (!preset) {
+    return "";
+  }
+
+  const parts = [
+    `Brightness ${preset.brightness >= 0 ? "+" : ""}${preset.brightness}`,
+    `Contrast ${preset.contrast}`,
+    `Grain ${preset.grain}`,
+    `Vignette ${preset.vignette}`,
+    `Scanner age ${preset.scannerAge ?? 0}`,
+  ];
+
+  if ((preset.thermalFade ?? 0) > 0) {
+    parts.push(`Thermal fade ${preset.thermalFade}`);
+  }
+
+  parts.push(`OCR-first ${preset.ocrFirstRecommended ? "on" : "off"}`);
+  return `Recommended defaults: ${parts.join(", ")}.`;
+}
+
+function updatePresetSpecificControlState() {
+  const thermalEnabled = elements.scanLookToggle.checked && elements.preset.value === "thermal";
+  elements.thermalFade.disabled = !thermalEnabled;
 }
 
 function getEffectiveControls(entry, controls = getControls()) {
@@ -1141,9 +1179,10 @@ function buildRenderCanvas(sourceImage, controls, options = {}, adjustments = cr
 function updateScanControlState() {
   const useScanLook = elements.scanLookToggle.checked;
   elements.controlsGrid.classList.toggle("disabled", !useScanLook);
-  [elements.preset, elements.brightness, elements.contrast, elements.grain, elements.vignette, elements.scannerAge, elements.ocrFirstMode].forEach((input) => {
+  [elements.preset, elements.brightness, elements.contrast, elements.grain, elements.vignette, elements.scannerAge, elements.thermalFade, elements.ocrFirstMode].forEach((input) => {
     input.disabled = !useScanLook;
   });
+  updatePresetSpecificControlState();
 }
 
 function syncPresetToControls() {
@@ -1153,11 +1192,15 @@ function syncPresetToControls() {
   elements.grain.value = preset.grain;
   elements.vignette.value = preset.vignette;
   elements.scannerAge.value = preset.scannerAge ?? 20;
+  elements.thermalFade.value = preset.thermalFade ?? 0;
   updatePresetDescription();
 }
 
 function updatePresetDescription() {
   elements.presetDescription.textContent = presetDescriptions[elements.preset.value];
+  elements.presetRecommendation.textContent = getPresetRecommendationText(elements.preset.value);
+  updatePresetSpecificControlState();
+  renderPresetComparison();
 }
 
 function canvasToBlob(canvas, mimeType, quality) {
@@ -1314,9 +1357,99 @@ function applyDotMatrixColumns(data, width, height, ageFactor) {
   }
 }
 
+function getPresetComparisonEntry() {
+  if (state.activeAdjustId) {
+    return state.files.find((file) => file.id === state.activeAdjustId) || null;
+  }
+
+  return getVisibleEntries()[0] || state.files[0] || null;
+}
+
+function getPresetControlsForComparison(baseControls, presetKey) {
+  const preset = presetSettings[presetKey];
+  return {
+    ...baseControls,
+    preset: presetKey,
+    brightness: preset.brightness,
+    contrast: preset.contrast,
+    grain: preset.grain,
+    vignette: preset.vignette,
+    scannerAge: preset.scannerAge ?? 0,
+    thermalFade: preset.thermalFade ?? 0,
+  };
+}
+
+function renderPresetComparison() {
+  if (!elements.presetComparisonGrid || !elements.presetComparisonNote) {
+    return;
+  }
+
+  elements.presetComparisonGrid.innerHTML = "";
+
+  if (!elements.scanLookToggle.checked) {
+    elements.presetComparisonNote.textContent = "Enable black-and-white scan to compare presets live.";
+    return;
+  }
+
+  const sourceEntry = getPresetComparisonEntry();
+  if (!sourceEntry) {
+    elements.presetComparisonNote.textContent = "Upload a page to compare presets side by side.";
+    return;
+  }
+
+  elements.presetComparisonNote.textContent = `Comparing presets on ${sourceEntry.name}.`;
+  const baseControls = getControls();
+
+  Object.keys(presetSettings).forEach((presetKey) => {
+    const card = document.createElement("article");
+    card.className = "preset-comparison-card";
+    if (presetKey === baseControls.preset) {
+      card.classList.add("is-active");
+    }
+
+    const title = document.createElement("h3");
+    title.className = "preset-comparison-title";
+    title.textContent = getPresetLabel(presetKey);
+
+    const frame = document.createElement("div");
+    frame.className = "preset-comparison-frame";
+    const canvas = document.createElement("canvas");
+
+    try {
+      const rendered = buildRenderCanvas(
+        sourceEntry.sourceImage,
+        getPresetControlsForComparison(baseControls, presetKey),
+        { maxDimension: 240 },
+        getEntryAdjustments(sourceEntry)
+      );
+      canvas.width = rendered.width;
+      canvas.height = rendered.height;
+      const context = canvas.getContext("2d");
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "medium";
+      context.drawImage(rendered, 0, 0);
+    } catch {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+
+    frame.appendChild(canvas);
+
+    const description = document.createElement("p");
+    description.className = "preset-comparison-description";
+    description.textContent = presetDescriptions[presetKey];
+
+    card.appendChild(title);
+    card.appendChild(frame);
+    card.appendChild(description);
+    elements.presetComparisonGrid.appendChild(card);
+  });
+}
+
 function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImage.width, height: sourceImage.height }) {
   const preset = presetSettings[controls.preset];
   const ageFactor = Math.max(0, Math.min(1, (controls.scannerAge ?? preset.scannerAge ?? 0) / 100));
+  const thermalFade = preset.dotMatrixColumns ? Math.max(0, Math.min(1, (controls.thermalFade ?? preset.thermalFade ?? 0) / 100)) : 0;
   const ocrFirstMode = Boolean(controls.ocrFirstMode);
   const processingScale = Math.max(0.35, (preset.processingScale ?? 1) - ((preset.pureMono ? 0.12 : 0.04) * ageFactor));
   const processingWidth = Math.max(1, Math.round(dimensions.width * processingScale));
@@ -1380,6 +1513,15 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
     if (preset.pureMono) {
       const rowThreshold = threshold + Math.sin(y / 5.5) * (ocrFirstMode ? 4 : 8) + (((y % 4) - 1.5) * (ocrFirstMode ? 0.8 : 1.5));
       grayscaleValue = grayscaleValue < rowThreshold ? 0 : 255;
+    }
+
+    if (thermalFade > 0 && grayscaleValue < 255) {
+      const fadePattern = ((Math.sin((x * 0.18) + (y * 0.05)) + Math.cos((y * 0.11) - (x * 0.03))) * 0.25) + 0.5 + (Math.random() * 0.12);
+      const fadeLift = thermalFade * (24 + (fadePattern * 112));
+      grayscaleValue = clamp(grayscaleValue + fadeLift);
+      if (grayscaleValue < 128 && fadePattern > (0.74 - (thermalFade * 0.18))) {
+        grayscaleValue = 255;
+      }
     }
 
     if (ocrFirstMode) {
@@ -1620,6 +1762,7 @@ function renderPreviews() {
   elements.activeFiltersSummary.textContent = getActiveFilterSummary();
   updateDownloadButtonLabel();
   updateVisibleActionLabels();
+  renderPresetComparison();
   if (hiddenByFilter) {
     setStatus(
       `${state.files.length} page${state.files.length > 1 ? "s" : ""} loaded, but the current page filter is hiding all of them. Switch the Pages filter to Show all pages to restore the preview.${elements.exportVisibleOnly.checked ? " Visible-only export is also hiding downloads." : ""}`
@@ -2711,6 +2854,11 @@ elements.selectDetectedBlanks.addEventListener("change", updateBlankActionLabel)
     scheduleRenderPreviews();
     renderAdjustPreview();
   });
+});
+
+elements.thermalFade.addEventListener("input", () => {
+  scheduleRenderPreviews();
+  renderAdjustPreview();
 });
 
 elements.ocrFirstMode.addEventListener("change", () => {
