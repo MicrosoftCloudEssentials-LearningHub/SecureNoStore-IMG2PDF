@@ -12,7 +12,7 @@ Last updated: 2026-03-25
 > Static demo app for GitHub Pages that lets users upload photos and convert them into black-and-white scan PDF documents entirely in the browser.
 
 > [!NOTE]
-> This demo is designed so image processing and PDF creation happen in the browser runtime. GitHub Pages only serves the static assets; it does not receive uploaded image data from the app.
+> [This demo](https://microsoftcloudessentials-learninghub.github.io/SecureNoStore-IMG2PDF/) is designed so image processing and PDF creation happen in the browser runtime. GitHub Pages only serves the static assets; it does not receive uploaded image data from the app.
 
 <img width="2102" height="3088" alt="image" src="https://github.com/user-attachments/assets/2dcb56d7-6eb6-4556-886e-5699b288e0fa" />
 
