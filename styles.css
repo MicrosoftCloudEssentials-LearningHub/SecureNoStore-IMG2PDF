@@ -70,6 +70,12 @@ body::before {
   margin-bottom: 24px;
 }
 
+.hero-main {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
 .hero-rail {
   display: grid;
   gap: 18px;
@@ -1154,6 +1160,10 @@ button:disabled {
 @media (max-width: 960px) {
   .hero {
     grid-template-columns: 1fr;
+  }
+
+  .hero-main {
+    gap: 18px;
   }
 
   .workspace {
