@@ -26,15 +26,17 @@ const minRemainingCropPercent = 10;
 const autoDetectCropPadding = 0.012;
 
 const presetSettings = {
-  clean: { brightness: 14, contrast: 106, grain: 1, vignette: 2, threshold: 186, shadowBoost: 0.14 },
-  classic: { brightness: 7, contrast: 126, grain: 5, vignette: 4, threshold: 164, shadowBoost: 0.26 },
-  "high-contrast": { brightness: 2, contrast: 146, grain: 2, vignette: 1, threshold: 150, shadowBoost: 0.38 },
+  clean: { brightness: 16, contrast: 114, grain: 1, vignette: 2, threshold: 188, shadowBoost: 0.14, binaryMix: 0.58, lineNoise: 0.014, tonerNoise: 0.006 },
+  classic: { brightness: 8, contrast: 132, grain: 6, vignette: 5, threshold: 166, shadowBoost: 0.28, binaryMix: 0.74, lineNoise: 0.028, tonerNoise: 0.012 },
+  "high-contrast": { brightness: 3, contrast: 152, grain: 3, vignette: 1, threshold: 150, shadowBoost: 0.4, binaryMix: 0.88, lineNoise: 0.018, tonerNoise: 0.009 },
+  fax: { brightness: 0, contrast: 168, grain: 7, vignette: 1, threshold: 142, shadowBoost: 0.46, binaryMix: 0.96, lineNoise: 0.045, tonerNoise: 0.022 },
 };
 
 const presetDescriptions = {
-  clean: "Office scanner keeps pages light and clean with the least texture.",
-  classic: "Photocopier adds a rougher copied-paper feel with more scan texture.",
-  "high-contrast": "Receipts and forms darkens text for small print, faded paper, and sharp document edges.",
+  clean: "Office scanner keeps pages bright and legible while flattening background paper tone.",
+  classic: "Photocopier adds rougher toner texture and stronger black-and-white document separation.",
+  "high-contrast": "Receipts and forms pushes darker text and harder edges for faded print and low-contrast paper.",
+  fax: "Fax mode leans into hard thresholding, feed-line texture, and coarse monochrome contrast.",
 };
 
 const broadlySupportedExtensions = new Set([
@@ -1247,20 +1249,44 @@ function applyScanEffect(sourceImage, controls, dimensions = { width: sourceImag
   const grainAmount = controls.grain;
   const threshold = preset.threshold;
   const shadowBoost = preset.shadowBoost;
+  const binaryMix = preset.binaryMix ?? 0.72;
+  const lineNoise = preset.lineNoise ?? 0.02;
+  const tonerNoise = preset.tonerNoise ?? 0.01;
+  const rowJitterSeed = Math.max(1, Math.round(canvas.height / 140));
 
   for (let index = 0; index < data.length; index += 4) {
+    const pixelIndex = index / 4;
+    const x = pixelIndex % canvas.width;
+    const y = Math.floor(pixelIndex / canvas.width);
     const red = data[index];
     const green = data[index + 1];
     const blue = data[index + 2];
     const baseGray = red * 0.299 + green * 0.587 + blue * 0.114;
     const colorSpread = Math.max(red, green, blue) - Math.min(red, green, blue);
     const noise = (Math.random() - 0.5) * grainAmount * 2;
-    const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise);
+    const scanLineOffset = Math.sin((y / rowJitterSeed) * 0.9) * 255 * lineNoise;
+    const feedOffset = ((y % 3) === 0 ? -1 : 1) * 255 * lineNoise * 0.18;
+    const edgeFalloff = ((x / Math.max(1, canvas.width)) - 0.5) * 255 * lineNoise * 0.08;
+    const adjustedGray = clamp(((baseGray - 128) * contrastFactor) + 128 + brightnessOffset + noise + scanLineOffset + feedOffset + edgeFalloff);
     const cleanupLift = controls.autoCleanup ? Math.max(0, adjustedGray - 168) * 0.72 : 0;
     const cleanedGray = clamp(adjustedGray + cleanupLift);
     const darkness = Math.max(0, threshold - cleanedGray) / threshold;
     const backgroundCandidate = controls.autoCleanup && cleanedGray > threshold - 18 && colorSpread < 44;
-    let grayscaleValue = clamp(cleanedGray - (darkness * 255 * shadowBoost));
+    const thresholdDelta = cleanedGray - threshold;
+    const binaryTarget = thresholdDelta < -24
+      ? 8
+      : thresholdDelta < 12
+        ? clamp(120 + (thresholdDelta * 5.5))
+        : 252;
+    let grayscaleValue = clamp((cleanedGray * (1 - binaryMix)) + (binaryTarget * binaryMix) - (darkness * 255 * shadowBoost));
+
+    if (!backgroundCandidate && grayscaleValue < 56 && Math.random() < tonerNoise) {
+      grayscaleValue = 0;
+    }
+
+    if (grayscaleValue > 238) {
+      grayscaleValue = 255;
+    }
 
     if (backgroundCandidate || (controls.autoCleanup && grayscaleValue > threshold + 14)) {
       grayscaleValue = 255;
